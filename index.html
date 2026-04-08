@@ -47,8 +47,8 @@
         <button id="saveBtn" disabled>保存してリセット</button>
         <div class="sliders">
             <div class="slider-group">
-                <label>マイク感度（音のしきい値）: <span id="sVal">30</span></label>
-                <input type="range" id="sS" min="5" max="150" value="30">
+                <label>マイク感度（低いほど敏感）: <span id="sVal">20</span></label>
+                <input type="range" id="sS" min="5" max="120" value="20">
             </div>
             <div class="slider-group">
                 <label>誤検出防止（反応間隔）: <span id="cVal">400</span>ms</label>
@@ -104,7 +104,8 @@
             if (dataArray[i] > maxVolume) maxVolume = dataArray[i];
         }
         
-        vMeter.style.width = (maxVolume / 255 * 100) + "%";
+        // メーターの反応を少し強調
+        vMeter.style.width = Math.min(100, (maxVolume / 200 * 100)) + "%";
 
         const threshold = parseInt(document.getElementById('sS').value);
         const cooldown = parseInt(document.getElementById('cS').value);
@@ -140,20 +141,24 @@
         if (!counting) {
             try {
                 stream = await navigator.mediaDevices.getUserMedia({ 
-                    audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } 
+                    audio: { 
+                        echoCancellation: false, 
+                        noiseSuppression: false, 
+                        autoGainControl: false 
+                    } 
                 });
                 
                 audioCtx = new (window.AudioContext || window.webkitAudioContext)();
                 const source = audioCtx.createMediaStreamSource(stream);
                 
-                // フィルターを500Hzに緩和（けん玉の音を通りやすくする）
+                // フィルターを200Hzに（低音ノイズだけをカット）
                 biquadFilter = audioCtx.createBiquadFilter();
                 biquadFilter.type = "highpass";
-                biquadFilter.frequency.value = 500; 
+                biquadFilter.frequency.value = 200; 
                 
                 analyser = audioCtx.createAnalyser();
-                analyser.fftSize = 256;
-                analyser.minDecibels = -80; // 検知できる最小音の幅を広げる
+                analyser.fftSize = 512; // 精度を上げる
+                analyser.minDecibels = -85; 
                 
                 source.connect(biquadFilter);
                 biquadFilter.connect(analyser);
