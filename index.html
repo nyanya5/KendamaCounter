@@ -39,7 +39,7 @@
     <div id="count">0</div>
     <div id="paw">🐾</div>
     
-    <label>マイク入力レベル</label>
+    <label>マイク入力レベル（高域抽出）</label>
     <div class="meter-bg"><div id="v-meter"></div></div>
 
     <div class="controls">
@@ -67,10 +67,10 @@
 </div>
 
 <script>
-    let audioCtx, analyser, dataArray, stream;
+    let audioCtx, analyser, dataArray, stream, biquadFilter;
     let counting = false;
     let count = 0;
-    let tapTimes = []; // 全ての検知時刻を保存する配列
+    let tapTimes = [];
     let startTime;
     let timerInt;
     let history = JSON.parse(localStorage.getItem('kendama_history') || '[]');
@@ -98,10 +98,12 @@
     function monitorSound() {
         if (!counting) return;
         analyser.getByteFrequencyData(dataArray);
+        
         let maxVolume = 0;
         for (let i = 0; i < dataArray.length; i++) {
             if (dataArray[i] > maxVolume) maxVolume = dataArray[i];
         }
+        
         vMeter.style.width = (maxVolume / 255 * 100) + "%";
 
         const threshold = parseInt(document.getElementById('sS').value);
@@ -109,11 +111,10 @@
         const now = Date.now();
         const lastTime = tapTimes.length > 0 ? tapTimes[tapTimes.length - 1] : 0;
 
-        // 音を検知した時の処理
         if (maxVolume > threshold && (now - lastTime) > cooldown && (now - startTime) > 1000) {
             count++;
             countDisp.innerText = count;
-            tapTimes.push(now); // 時刻を配列に追加
+            tapTimes.push(now);
             
             paw.style.transform = "scale(1.5)";
             setTimeout(() => paw.style.transform = "scale(1)", 100);
@@ -138,15 +139,30 @@
     startBtn.onclick = async () => {
         if (!counting) {
             try {
-                // ノイズ対策設定
                 stream = await navigator.mediaDevices.getUserMedia({ 
-                    audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } 
+                    audio: { 
+                        echoCancellation: false, 
+                        noiseSuppression: false, 
+                        autoGainControl: false 
+                    } 
                 });
+                
                 audioCtx = new (window.AudioContext || window.webkitAudioContext)();
                 const source = audioCtx.createMediaStreamSource(stream);
+                
+                // 【ノイズ対策】ハイパスフィルターを追加（低い音をカット）
+                biquadFilter = audioCtx.createBiquadFilter();
+                biquadFilter.type = "highpass";
+                biquadFilter.frequency.value = 1000; // 1000Hz以下のノイズをカット
+                
                 analyser = audioCtx.createAnalyser();
                 analyser.fftSize = 256;
-                source.connect(analyser);
+                analyser.minDecibels = -70; // 小さすぎる背景ノイズを無視
+                
+                // 接続: マイク -> フィルター -> 解析器
+                source.connect(biquadFilter);
+                biquadFilter.connect(analyser);
+                
                 dataArray = new Uint8Array(analyser.frequencyBinCount);
 
                 startBtn.disabled = true;
@@ -176,26 +192,21 @@
                 alert("マイクの使用を許可してください。");
             }
         } else {
-            // ストップボタンが押された時の補正処理
             counting = false;
             clearInterval(timerInt);
             if (stream) stream.getTracks().forEach(t => t.stop());
 
-            // 配列から最後の1回（ミス音）を削除してカウントを減らす
             if (count > 0) {
                 count--;
                 tapTimes.pop();
             }
 
-            // 補正後の最終成功時刻を取得
             const lastSuccessTime = tapTimes.length > 0 ? tapTimes[tapTimes.length - 1] : startTime;
             const finalTimeMs = (count > 0) ? (lastSuccessTime - startTime) : 0;
             
-            // 画面表示を即座に更新
             countDisp.innerText = count;
             timerDisp.innerText = formatTime(finalTimeMs);
             
-            // 補正後のタイムでBPMを再計算
             if (finalTimeMs > 1000 && count > 0) {
                 const finalBpm = Math.round((count / (finalTimeMs / 1000)) * 60);
                 bpmDisp.innerText = `${finalBpm} BPM`;
@@ -210,7 +221,6 @@
     };
 
     saveBtn.onclick = () => {
-        // 現在画面に表示されている数値を保存
         const duration = timerDisp.innerText;
         const bpmValue = bpmDisp.innerText;
         const date = new Date().toLocaleString('ja-JP', {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'});
