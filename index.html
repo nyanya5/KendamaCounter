@@ -71,6 +71,7 @@
     let counting = false;
     let count = 0;
     let lastTime = 0;
+    let beforeLastTime = 0; // 1つ前の成功音の時間を記録
     let startTime;
     let timerInt;
     let history = JSON.parse(localStorage.getItem('kendama_history') || '[]');
@@ -110,9 +111,11 @@
         const gracePeriod = 1000; 
 
         if (maxVolume > threshold && (now - lastTime) > cooldown && (now - startTime) > gracePeriod) {
+            beforeLastTime = lastTime; // 1つ前の音の時間を保存
             count++;
             countDisp.innerText = count;
-            lastTime = now;
+            lastTime = now; // 最新の音（ミス含む）の時間を保存
+            
             paw.style.transform = "scale(1.5)";
             setTimeout(() => paw.style.transform = "scale(1)", 100);
             updateBPM();
@@ -151,6 +154,8 @@
                 counting = true;
                 count = 0;
                 startTime = Date.now();
+                lastTime = startTime; 
+                beforeLastTime = startTime;
                 countDisp.innerText = "0";
                 startBtn.innerText = "ストップ";
                 startBtn.classList.add('stop');
@@ -175,15 +180,30 @@
         }
     };
 
-    // 保存ボタン：確認ダイアログ（alert）を削除
     saveBtn.onclick = () => {
-        const duration = timerDisp.innerText;
-        const bpmValue = bpmDisp.innerText;
+        // --- もしかめ用 補正ロジック ---
+        // 最後の1回（ミス音）を除外するため、カウントを-1、タイムを最後から2番目の音までに調整
+        const finalCount = Math.max(0, count - 1);
+        
+        // 計測時間は (最後から2番目の音の時刻 - 開始時刻)
+        // もし1回も成功していなければ0
+        const finalTimeMs = (finalCount > 0) ? (beforeLastTime - startTime) : 0;
+        const s = Math.floor(finalTimeMs / 1000);
+        const finalDuration = `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`;
+        
+        // BPMも補正後の数値で再計算
+        let finalBpm = "0 BPM";
+        if (finalTimeMs > 1000) {
+            finalBpm = Math.round((finalCount / (finalTimeMs / 1000)) * 60) + " BPM";
+        }
+
         const date = new Date().toLocaleString('ja-JP', {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'});
-        history.unshift({ date, count, duration, bpm: bpmValue });
+        
+        // 履歴には補正後のデータを保存
+        history.unshift({ date, count: finalCount, duration: finalDuration, bpm: finalBpm });
         localStorage.setItem('kendama_history', JSON.stringify(history.slice(0, 50)));
         
-        // 画面をリセット
+        // 画面リセット
         count = 0;
         countDisp.innerText = "0";
         timerDisp.innerText = "00:00";
@@ -192,7 +212,7 @@
     };
 
     function renderHistory() {
-        historyList.innerHTML = history.map(item => `<div style="background:white; margin-bottom:5px; padding:10px; border-radius:10px;">${item.date}: ${item.count}回 (${item.duration}) ${item.bpm || ''}</div>`).join('');
+        historyList.innerHTML = history.map(item => `<div style="background:white; margin-bottom:5px; padding:10px; border-radius:10px;">${item.date}: <strong>${item.count}回</strong> (${item.duration}) ${item.bpm}</div>`).join('');
     }
 
     document.getElementById('historyBtn').onclick = () => {
@@ -200,7 +220,6 @@
         document.getElementById('historyScreen').style.display = 'flex';
     };
 
-    // 履歴消去ボタン：確認ダイアログ（confirm）を削除
     document.getElementById('clearBtn').onclick = () => {
         history = [];
         localStorage.removeItem('kendama_history');
