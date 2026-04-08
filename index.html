@@ -26,7 +26,6 @@
         label { font-size: 0.8rem; font-weight: bold; }
         input[type="range"] { width: 100%; accent-color: var(--pink); }
         
-        /* 履歴画面のスタイル */
         #historyScreen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg); display: none; padding: 20px; box-sizing: border-box; z-index: 100; flex-direction: column; }
         #historyList { flex: 1; overflow-y: auto; margin-bottom: 10px; }
         .clear-btn { background-color: #eee; color: #999; font-size: 0.9rem; padding: 10px; box-shadow: none; margin-bottom: 10px; }
@@ -176,13 +175,19 @@
         }
     };
 
+    // 保存ボタン：確認ダイアログ（alert）を削除
     saveBtn.onclick = () => {
         const duration = timerDisp.innerText;
         const bpmValue = bpmDisp.innerText;
         const date = new Date().toLocaleString('ja-JP', {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'});
         history.unshift({ date, count, duration, bpm: bpmValue });
         localStorage.setItem('kendama_history', JSON.stringify(history.slice(0, 50)));
-        alert("保存しました！");
+        
+        // 画面をリセット
+        count = 0;
+        countDisp.innerText = "0";
+        timerDisp.innerText = "00:00";
+        bpmDisp.innerText = "";
         saveBtn.disabled = true;
     };
 
@@ -195,12 +200,11 @@
         document.getElementById('historyScreen').style.display = 'flex';
     };
 
+    // 履歴消去ボタン：確認ダイアログ（confirm）を削除
     document.getElementById('clearBtn').onclick = () => {
-        if(confirm("全ての記録を削除しますか？")) {
-            history = [];
-            localStorage.removeItem('kendama_history');
-            renderHistory();
-        }
+        history = [];
+        localStorage.removeItem('kendama_history');
+        renderHistory();
     };
 
     document.getElementById('backBtn').onclick = () => document.getElementById('historyScreen').style.display = 'none';
