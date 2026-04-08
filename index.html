@@ -3,29 +3,30 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>もしかめカウンター🐾</title>
+    <title>音で測る！もしかめカウンター🐾</title>
     <style>
         :root { --brown: #5D4037; --pink: #F06292; --bg: #FFFBF0; --green: #A5D6A7; --red: #FF8A80; }
-        body { font-family: sans-serif; background: var(--bg); color: var(--brown); margin: 0; display: flex; flex-direction: column; align-items: center; height: 100vh; overflow: hidden; user-select: none; -webkit-tap-highlight-color: transparent; }
+        body { font-family: sans-serif; background: var(--bg); color: var(--brown); margin: 0; display: flex; flex-direction: column; align-items: center; height: 100vh; overflow: hidden; user-select: none; }
         .container { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 90%; max-width: 400px; text-align: center; }
         #timer { font-size: 1.5rem; font-weight: bold; margin-bottom: 10px; }
         #count { font-size: 9rem; font-weight: 900; margin: 0; line-height: 1; color: var(--brown); }
         #bpm { font-size: 1.2rem; font-weight: bold; color: var(--pink); height: 1.5rem; margin-bottom: 5px; }
         #paw { font-size: 4rem; transition: transform 0.1s; margin: 10px 0; }
-        .controls { width: 100%; }
+        
+        /* 音量ゲージ */
+        .meter-bg { width: 100%; height: 10px; background: #ddd; border-radius: 5px; margin-bottom: 20px; overflow: hidden; }
+        #v-meter { width: 0%; height: 100%; background: var(--pink); transition: width 0.1s; }
+
         button { width: 100%; padding: 18px; font-size: 1.3rem; font-weight: bold; border: none; border-radius: 20px; cursor: pointer; margin-bottom: 10px; box-shadow: 0 4px #ccc; }
         button:active { transform: translateY(2px); box-shadow: 0 2px #ccc; }
         #startBtn { background-color: var(--green); color: var(--brown); }
         #startBtn.stop { background-color: var(--red); color: white; }
         #saveBtn { background-color: var(--brown); color: white; }
-        #historyBtn { background:transparent; color:var(--brown); text-decoration:underline; border:none; box-shadow:none; }
         .sliders { width: 100%; background: white; padding: 12px; border-radius: 15px; box-sizing: border-box; margin-bottom: 10px; }
         .slider-group { margin-bottom: 5px; text-align: left; }
-        .slider-group label { font-size: 0.8rem; font-weight: bold; }
+        label { font-size: 0.8rem; font-weight: bold; }
         input[type="range"] { width: 100%; accent-color: var(--pink); }
-        #historyScreen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg); display: none; flex-direction: column; padding: 20px; box-sizing: border-box; z-index: 100; }
-        .history-list { flex: 1; overflow-y: auto; margin: 20px 0; }
-        .history-item { background: white; padding: 10px; border-radius: 10px; margin-bottom: 10px; font-size: 0.85rem; }
+        #historyScreen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg); display: none; padding: 20px; box-sizing: border-box; z-index: 100; flex-direction: column; }
     </style>
 </head>
 <body>
@@ -35,63 +36,40 @@
     <div id="bpm"></div>
     <div id="count">0</div>
     <div id="paw">🐾</div>
+    
+    <label>マイク入力レベル</label>
+    <div class="meter-bg"><div id="v-meter"></div></div>
+
     <div class="controls">
-        <button id="startBtn">スタート準備</button>
+        <button id="startBtn">マイクを許可して開始</button>
         <button id="saveBtn" disabled>保存してリセット</button>
         <div class="sliders">
-            <div class="slider-group"><label>感度（低いほど敏感）: <span id="sVal">15</span></label><input type="range" id="sS" min="5" max="50" value="15"></div>
-            <div class="slider-group"><label>防止（連続音を防ぐ）: <span id="cVal">250</span>ms</label><input type="range" id="cS" min="50" max="800" value="250"></div>
+            <div class="slider-group">
+                <label>マイク感度（音のしきい値）: <span id="sVal">50</span></label>
+                <input type="range" id="sS" min="10" max="150" value="50">
+            </div>
+            <div class="slider-group">
+                <label>防止（連続音を防ぐ）: <span id="cVal">250</span>ms</label>
+                <input type="range" id="cS" min="50" max="800" value="250">
+            </div>
         </div>
-        <button id="historyBtn">履歴を表示</button>
+        <button id="historyBtn" style="background:none; text-decoration:underline; box-shadow:none; color:var(--brown);">履歴を表示</button>
     </div>
 </div>
 
 <div id="historyScreen">
     <h2>練習の記録 🐾</h2>
-    <div class="history-list" id="historyList"></div>
+    <div id="historyList" style="flex:1; overflow-y:auto;"></div>
     <button id="backBtn" style="background:var(--brown); color:white;">戻る</button>
 </div>
 
 <script>
-    // --- 改良版：アプリ風サウンド ---
-    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    
-    function playAppSound(isStart = false) {
-        if (audioCtx.state === 'suspended') audioCtx.resume();
-        const osc = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
-        const filter = audioCtx.createBiquadFilter();
-
-        osc.connect(filter);
-        filter.connect(gain);
-        gain.connect(audioCtx.destination);
-
-        if (isStart) {
-            osc.type = 'sine';
-            osc.frequency.setValueAtTime(1000, audioCtx.currentTime);
-            gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
-            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
-            osc.start();
-            osc.stop(audioCtx.currentTime + 0.1);
-        } else {
-            // 「カツッ」という厚みのある音
-            osc.type = 'triangle';
-            osc.frequency.setValueAtTime(600, audioCtx.currentTime);
-            osc.frequency.exponentialRampToValueAtTime(80, audioCtx.currentTime + 0.04);
-            filter.type = 'lowpass';
-            filter.frequency.value = 1500;
-            gain.gain.setValueAtTime(0.8, audioCtx.currentTime);
-            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.04);
-            osc.start();
-            osc.stop(audioCtx.currentTime + 0.04);
-        }
-    }
-
+    let audioCtx, analyser, dataArray, stream;
     let counting = false;
     let count = 0;
+    let lastTime = 0;
     let startTime;
     let timerInt;
-    let lastTime = 0;
     const history = JSON.parse(localStorage.getItem('kendama_history') || '[]');
 
     const startBtn = document.getElementById('startBtn');
@@ -100,32 +78,48 @@
     const timerDisp = document.getElementById('timer');
     const bpmDisp = document.getElementById('bpm');
     const paw = document.getElementById('paw');
+    const vMeter = document.getElementById('v-meter');
 
-    // 加速度センサー：より確実に反応するよう調整
-    function handleMotion(e) {
+    // 効果音の生成（フィードバック用）
+    function playBeep() {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        const g = ctx.createGain();
+        osc.connect(g); g.connect(ctx.destination);
+        osc.frequency.value = 800;
+        g.gain.setValueAtTime(0.5, ctx.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.05);
+        osc.start(); osc.stop(ctx.currentTime + 0.05);
+    }
+
+    // マイク音を監視するループ
+    function monitorSound() {
         if (!counting) return;
+        analyser.getByteFrequencyData(dataArray);
         
-        // accelerationIncludingGravity（重力込み）を優先使用
-        const acc = e.accelerationIncludingGravity || e.acceleration;
-        if (!acc || acc.x === null) return;
+        // 音量の最大値を取得
+        let maxVolume = 0;
+        for (let i = 0; i < dataArray.length; i++) {
+            if (dataArray[i] > maxVolume) maxVolume = dataArray[i];
+        }
 
-        const total = Math.sqrt(acc.x**2 + acc.y**2 + acc.z**2);
-        const threshold = parseFloat(document.getElementById('sS').value);
+        // ゲージの表示
+        vMeter.style.width = (maxVolume / 255 * 100) + "%";
+
+        const threshold = parseInt(document.getElementById('sS').value);
         const cooldown = parseInt(document.getElementById('cS').value);
         const now = Date.now();
 
-        // 衝撃を検知
-        if (total > threshold && (now - lastTime) > cooldown) {
+        if (maxVolume > threshold && (now - lastTime) > cooldown) {
             count++;
             countDisp.innerText = count;
             lastTime = now;
-            playAppSound(false);
-            
-            // アニメーション
-            paw.style.transform = "scale(1.8)";
-            setTimeout(() => paw.style.transform = "scale(1)", 80);
+            playBeep();
+            paw.style.transform = "scale(1.5)";
+            setTimeout(() => paw.style.transform = "scale(1)", 100);
             updateBPM();
         }
+        requestAnimationFrame(monitorSound);
     }
 
     function updateBPM() {
@@ -138,39 +132,38 @@
 
     startBtn.onclick = async () => {
         if (!counting) {
-            await audioCtx.resume();
-            if (typeof DeviceMotionEvent.requestPermission === 'function') {
-                const permission = await DeviceMotionEvent.requestPermission();
-                if (permission !== 'granted') return alert('設定 > Safari > モーションと画面の向きのアクセスをONにしてください');
-            }
+            try {
+                // マイクの使用許可を取得
+                stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                const source = audioCtx.createMediaStreamSource(stream);
+                analyser = audioCtx.createAnalyser();
+                analyser.fftSize = 256;
+                source.connect(analyser);
+                dataArray = new Uint8Array(analyser.frequencyBinCount);
 
-            startBtn.disabled = true;
-            for(let i=3; i>0; i--) {
-                startBtn.innerText = i;
-                playAppSound(true); 
-                await new Promise(r => setTimeout(r, 1000));
-            }
-            playAppSound(false);
+                counting = true;
+                count = 0;
+                startTime = Date.now();
+                countDisp.innerText = "0";
+                startBtn.innerText = "ストップ";
+                startBtn.classList.add('stop');
+                saveBtn.disabled = true;
 
-            counting = true;
-            count = 0;
-            startTime = Date.now();
-            countDisp.innerText = "0";
-            startBtn.disabled = false;
-            startBtn.innerText = "ストップ";
-            startBtn.classList.add('stop');
-            saveBtn.disabled = true;
-            
-            window.addEventListener('devicemotion', handleMotion, true);
-            timerInt = setInterval(() => {
-                const s = Math.floor((Date.now() - startTime) / 1000);
-                timerDisp.innerText = `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`;
-            }, 1000);
+                monitorSound();
+                timerInt = setInterval(() => {
+                    const s = Math.floor((Date.now() - startTime) / 1000);
+                    timerDisp.innerText = `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`;
+                }, 1000);
+
+            } catch (err) {
+                alert("マイクの使用が拒否されました。設定を確認してください。");
+            }
         } else {
             counting = false;
             clearInterval(timerInt);
-            window.removeEventListener('devicemotion', handleMotion, true);
-            startBtn.innerText = "スタート準備";
+            if (stream) stream.getTracks().forEach(t => t.stop());
+            startBtn.innerText = "マイクを許可して開始";
             startBtn.classList.remove('stop');
             saveBtn.disabled = false;
         }
@@ -182,13 +175,13 @@
         const date = new Date().toLocaleString('ja-JP', {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'});
         history.unshift({ date, count, duration, bpm });
         localStorage.setItem('kendama_history', JSON.stringify(history.slice(0, 50)));
-        count = 0; countDisp.innerText = "0"; timerDisp.innerText = "00:00"; bpmDisp.innerText = ""; saveBtn.disabled = true;
         alert("保存しました！");
+        saveBtn.disabled = true;
     };
 
     document.getElementById('historyBtn').onclick = () => {
         const list = document.getElementById('historyList');
-        list.innerHTML = history.map(item => `<div class="history-item"><strong>${item.date}</strong>: ${item.count}回 (${item.duration}) ${item.bpm}</div>`).join('');
+        list.innerHTML = history.map(item => `<div style="background:white; margin-bottom:5px; padding:10px; border-radius:10px;">${item.date}: ${item.count}回 (${item.duration})</div>`).join('');
         document.getElementById('historyScreen').style.display = 'flex';
     };
     document.getElementById('backBtn').onclick = () => document.getElementById('historyScreen').style.display = 'none';
