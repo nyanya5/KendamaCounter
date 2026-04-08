@@ -6,7 +6,7 @@
     <title>もしかめカウンター🐾</title>
     <style>
         :root { --brown: #5D4037; --pink: #F06292; --bg: #FFFBF0; --green: #A5D6A7; --red: #FF8A80; }
-        body { font-family: sans-serif; background-color: var(--bg); color: var(--brown); margin: 0; display: flex; flex-direction: column; align-items: center; height: 100vh; overflow: hidden; user-select: none; }
+        body { font-family: sans-serif; background: var(--bg); color: var(--brown); margin: 0; display: flex; flex-direction: column; align-items: center; height: 100vh; overflow: hidden; user-select: none; }
         .container { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 90%; max-width: 400px; text-align: center; }
         #timer { font-size: 1.5rem; font-weight: bold; margin-bottom: 20px; }
         #count { font-size: 8rem; font-weight: 900; margin: 0; line-height: 1; }
@@ -23,7 +23,7 @@
         input[type="range"] { width: 100%; accent-color: var(--pink); }
         #historyScreen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg); display: none; flex-direction: column; padding: 20px; box-sizing: border-box; z-index: 100; }
         .history-list { flex: 1; overflow-y: auto; margin: 20px 0; }
-        .history-item { background: white; padding: 10px; border-radius: 10px; margin-bottom: 10px; font-size: 0.9rem; }
+        .history-item { background: white; padding: 10px; border-radius: 10px; margin-bottom: 10px; font-size: 0.8rem; text-align: left; }
     </style>
 </head>
 <body>
@@ -46,7 +46,7 @@
                 <input type="range" id="coolSlider" min="50" max="1000" value="300">
             </div>
         </div>
-        <button id="historyBtn" style="background:transparent; color:var(--brown); text-decoration:underline;">過去の履歴 ＞</button>
+        <button id="historyBtn" style="background:transparent; color:var(--brown); text-decoration:underline;">履歴表示 ＞</button>
     </div>
 </div>
 
@@ -57,84 +57,65 @@
 </div>
 
 <script>
-    let audioContext, analyser, dataArray, timerInterval;
+    let audioCtx, analyser, dataArray, timerInterval;
     let isMeasuring = false, startTime = 0, detectionTimes = [];
-    
-    const countEl = document.getElementById('count'), timerEl = document.getElementById('timer'), bpmEl = document.getElementById('bpm');
-    const startBtn = document.getElementById('startBtn'), saveBtn = document.getElementById('saveBtn'), paw = document.getElementById('paw');
 
-    // 音声を初期化する関数
-    async function setupAudio() {
-        if (!audioContext) {
-            audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        }
-        if (audioContext.state === 'suspended') {
-            await audioContext.resume();
-        }
-        // マイクの初期化（未完了の場合のみ）
-        if (!analyser) {
+    // 音声ファイルの用意（短いピッという音と、ピーという音の代わり）
+    const beepLow = new Audio('https://actions.google.com/sounds/v1/foley/clock_ticking.ogg');
+    const beepHigh = new Audio('https://actions.google.com/sounds/v1/alarms/digital_watch_alarm_long.ogg');
+
+    async function initAudio() {
+        if (!audioCtx) {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            const source = audioContext.createMediaStreamSource(stream);
-            analyser = audioContext.createAnalyser();
+            const source = audioCtx.createMediaStreamSource(stream);
+            analyser = audioCtx.createAnalyser();
             analyser.fftSize = 256;
             source.connect(analyser);
             dataArray = new Uint8Array(analyser.frequencyBinCount);
         }
+        if (audioCtx.state === 'suspended') await audioCtx.resume();
+        // iPhone対策：音源を一度「無音」で再生してロック解除
+        beepLow.play().then(() => { beepLow.pause(); beepLow.currentTime = 0; });
     }
 
-    // ビープ音再生
-    function playBeep(freq, duration) {
-        if (!audioContext) return;
-        const osc = audioContext.createOscillator();
-        const gain = audioContext.createGain();
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(freq, audioContext.currentTime);
-        gain.gain.setValueAtTime(0.1, audioContext.currentTime);
-        osc.connect(gain);
-        gain.connect(audioContext.destination);
-        osc.start();
-        osc.stop(audioContext.currentTime + duration);
-    }
+    document.getElementById('startBtn').onclick = async () => {
+        await initAudio();
+        if (!isMeasuring) {
+            document.getElementById('startBtn').disabled = true;
+            let cd = 3;
+            document.getElementById('count').innerText = cd;
+            beepLow.play(); // 3
 
-    startBtn.onclick = async () => {
-        try {
-            await setupAudio(); // ボタンを押した瞬間にオーディオを有効化
-            
-            if (!isMeasuring) {
-                startBtn.disabled = true;
-                let cd = 3;
-                bpmEl.innerText = "";
-                countEl.innerText = cd;
-                playBeep(440, 0.1); // 最初の「ピッ」
-
-                const cdInt = setInterval(() => {
-                    cd--;
-                    if (cd > 0) {
-                        countEl.innerText = cd;
-                        playBeep(440, 0.1); // ピッ
-                    } else {
-                        clearInterval(cdInt);
-                        playBeep(880, 0.3); // ピー！
-                        startMeasuring();
-                    }
-                }, 1000);
-            } else {
-                stopMeasuring();
-            }
-        } catch (e) {
-            alert("エラー: " + e);
+            const cdInt = setInterval(() => {
+                cd--;
+                if (cd > 0) {
+                    document.getElementById('count').innerText = cd;
+                    beepLow.play(); // 2, 1
+                } else {
+                    clearInterval(cdInt);
+                    beepHigh.play(); // START!
+                    startMeasuring();
+                }
+            }, 1000);
+        } else {
+            stopMeasuring();
         }
     };
 
     function startMeasuring() {
         isMeasuring = true; detectionTimes = []; startTime = Date.now();
-        countEl.innerText = "0"; startBtn.innerText = "ミス！(計測終了)";
-        startBtn.classList.add('stop'); startBtn.disabled = false; saveBtn.disabled = true;
-        timerInterval = setInterval(() => { timerEl.innerText = formatTime(Date.now() - startTime); }, 100);
-        detectSound();
+        document.getElementById('count').innerText = "0";
+        document.getElementById('startBtn').innerText = "ミス！(終了)";
+        document.getElementById('startBtn').classList.add('stop');
+        document.getElementById('startBtn').disabled = false;
+        timerInterval = setInterval(() => {
+            document.getElementById('timer').innerText = formatTime(Date.now() - startTime);
+        }, 100);
+        detect();
     }
 
-    function detectSound() {
+    function detect() {
         if (!isMeasuring) return;
         analyser.getByteTimeDomainData(dataArray);
         let max = 0;
@@ -143,31 +124,40 @@
             if (v > max) max = v;
         }
         const now = Date.now();
-        if (max > (document.getElementById('sensSlider').value / 10) && (now - (window.lastT || 0)) > document.getElementById('coolSlider').value) {
-            detectionTimes.push(now); countEl.innerText = detectionTimes.length; window.lastT = now;
-            paw.style.transform = "scale(1.4)"; setTimeout(() => paw.style.transform = "scale(1)", 100);
+        if (max > (document.getElementById('sensSlider').value / 10) && (now - (window.lt || 0)) > document.getElementById('coolSlider').value) {
+            detectionTimes.push(now);
+            document.getElementById('count').innerText = detectionTimes.length;
+            window.lt = now;
+            document.getElementById('paw').style.transform = "scale(1.4)";
+            setTimeout(() => document.getElementById('paw').style.transform = "scale(1)", 100);
         }
-        requestAnimationFrame(detectSound);
+        requestAnimationFrame(detect);
     }
 
     function stopMeasuring() {
         isMeasuring = false; clearInterval(timerInterval);
-        startBtn.innerText = "計測スタート"; startBtn.classList.remove('stop'); saveBtn.disabled = false;
+        document.getElementById('startBtn').innerText = "計測スタート";
+        document.getElementById('startBtn').classList.remove('stop');
+        document.getElementById('saveBtn').disabled = false;
         if (detectionTimes.length >= 2) {
-            const count = detectionTimes.length - 1;
-            const time = detectionTimes[detectionTimes.length - 2] - startTime;
-            countEl.innerText = count; timerEl.innerText = formatTime(time);
-            bpmEl.innerText = (count / (time / 60000)).toFixed(1) + " 回/分 (BPM)";
-            window.lastResult = { count, time, bpm: count / (time / 60000) };
+            const c = detectionTimes.length - 1;
+            const t = detectionTimes[detectionTimes.length - 2] - startTime;
+            document.getElementById('count').innerText = c;
+            document.getElementById('timer').innerText = formatTime(t);
+            document.getElementById('bpm').innerText = (c / (t / 60000)).toFixed(1) + " BPM";
+            window.lastR = { c, t, b: (c / (t / 60000)) };
         }
     }
 
-    saveBtn.onclick = () => {
-        const res = window.lastResult;
-        const log = `${new Date().toLocaleString()} | ${formatTime(res.time)} | ${res.count}回 (${res.bpm.toFixed(1)}/分)`;
-        let h = JSON.parse(localStorage.getItem('k_history') || "[]");
-        h.unshift(log); localStorage.setItem('k_history', JSON.stringify(h));
-        countEl.innerText = "0"; timerEl.innerText = "00:00"; bpmEl.innerText = ""; saveBtn.disabled = true;
+    document.getElementById('saveBtn').onclick = () => {
+        const r = window.lastR;
+        const log = `${new Date().toLocaleString()} | ${formatTime(r.t)} | ${r.c}回 (${r.b.toFixed(1)}/分)`;
+        let h = JSON.parse(localStorage.getItem('k_h') || "[]");
+        h.unshift(log); localStorage.setItem('k_h', JSON.stringify(h));
+        document.getElementById('count').innerText = "0";
+        document.getElementById('timer').innerText = "00:00";
+        document.getElementById('bpm').innerText = "";
+        document.getElementById('saveBtn').disabled = true;
     };
 
     function formatTime(ms) {
@@ -176,7 +166,7 @@
     }
 
     document.getElementById('historyBtn').onclick = () => {
-        document.getElementById('historyList').innerHTML = JSON.parse(localStorage.getItem('k_history') || "[]").map(i => `<div class="history-item">${i}</div>`).join('');
+        document.getElementById('historyList').innerHTML = JSON.parse(localStorage.getItem('k_h') || "[]").map(i => `<div class="history-item">${i}</div>`).join('');
         document.getElementById('historyScreen').style.display = 'flex';
     };
     document.getElementById('backBtn').onclick = () => document.getElementById('historyScreen').style.display = 'none';
