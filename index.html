@@ -6,26 +6,26 @@
     <title>もしかめカウンター🐾</title>
     <style>
         :root { --brown: #5D4037; --pink: #F06292; --bg: #FFFBF0; --green: #A5D6A7; --red: #FF8A80; }
-        body { font-family: sans-serif; background: var(--bg); color: var(--brown); margin: 0; display: flex; flex-direction: column; align-items: center; height: 100vh; overflow: hidden; user-select: none; }
+        body { font-family: sans-serif; background: var(--bg); color: var(--brown); margin: 0; display: flex; flex-direction: column; align-items: center; height: 100vh; overflow: hidden; user-select: none; -webkit-tap-highlight-color: transparent; }
         .container { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 90%; max-width: 400px; text-align: center; }
-        #timer { font-size: 1.5rem; font-weight: bold; margin-bottom: 20px; }
-        #count { font-size: 8rem; font-weight: 900; margin: 0; line-height: 1; }
-        #bpm { font-size: 1.5rem; font-weight: bold; color: var(--pink); height: 2rem; margin-bottom: 10px; }
-        #paw { font-size: 4rem; transition: transform 0.1s; }
-        .controls { width: 100%; margin-top: 20px; }
-        button { width: 100%; padding: 15px; font-size: 1.2rem; font-weight: bold; border: none; border-radius: 15px; cursor: pointer; margin-bottom: 10px; color: white; }
+        #timer { font-size: 1.5rem; font-weight: bold; margin-bottom: 10px; }
+        #count { font-size: 9rem; font-weight: 900; margin: 0; line-height: 1; color: var(--brown); }
+        #bpm { font-size: 1.2rem; font-weight: bold; color: var(--pink); height: 1.5rem; margin-bottom: 5px; }
+        #paw { font-size: 4rem; transition: transform 0.1s; margin: 10px 0; }
+        .controls { width: 100%; }
+        button { width: 100%; padding: 18px; font-size: 1.3rem; font-weight: bold; border: none; border-radius: 20px; cursor: pointer; margin-bottom: 10px; box-shadow: 0 4px #ccc; }
+        button:active { transform: translateY(2px); box-shadow: 0 2px #ccc; }
         #startBtn { background-color: var(--green); color: var(--brown); }
         #startBtn.stop { background-color: var(--red); color: white; }
-        #saveBtn { background-color: var(--brown); }
-        #historyBtn { background:transparent; color:var(--brown); text-decoration:underline; border:none; }
-        .sliders { width: 100%; background: white; padding: 15px; border-radius: 15px; box-sizing: border-box; margin-bottom: 10px; }
-        .slider-group { margin-bottom: 10px; text-align: left; }
+        #saveBtn { background-color: var(--brown); color: white; }
+        #historyBtn { background:transparent; color:var(--brown); text-decoration:underline; border:none; box-shadow:none; }
+        .sliders { width: 100%; background: white; padding: 12px; border-radius: 15px; box-sizing: border-box; margin-bottom: 10px; }
+        .slider-group { margin-bottom: 5px; text-align: left; }
         .slider-group label { font-size: 0.8rem; font-weight: bold; }
         input[type="range"] { width: 100%; accent-color: var(--pink); }
-        /* 履歴画面 */
         #historyScreen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg); display: none; flex-direction: column; padding: 20px; box-sizing: border-box; z-index: 100; }
         .history-list { flex: 1; overflow-y: auto; margin: 20px 0; }
-        .history-item { background: white; padding: 10px; border-radius: 10px; margin-bottom: 10px; font-size: 0.85rem; text-align: left; }
+        .history-item { background: white; padding: 10px; border-radius: 10px; margin-bottom: 10px; font-size: 0.85rem; }
     </style>
 </head>
 <body>
@@ -36,7 +36,7 @@
     <div id="count">0</div>
     <div id="paw">🐾</div>
     <div class="controls">
-        <button id="startBtn">音を準備してスタート</button>
+        <button id="startBtn">スタート準備</button>
         <button id="saveBtn" disabled>保存してリセット</button>
         <div class="sliders">
             <div class="slider-group"><label>感度: <span id="sVal">150</span></label><input type="range" id="sS" min="10" max="500" value="150"></div>
@@ -49,28 +49,48 @@
 <div id="historyScreen">
     <h2>練習の記録 🐾</h2>
     <div class="history-list" id="historyList"></div>
-    <button id="backBtn" style="background:var(--brown);">戻る</button>
-    <button id="clearBtn" style="background:var(--red); margin-top:5px;">履歴削除</button>
+    <button id="backBtn" style="background:var(--brown); color:white;">戻る</button>
 </div>
 
 <script>
-    // --- 音声生成（Web Audio APIを使用：最も確実に鳴る方法） ---
+    // --- 高品質なサウンド生成（アプリっぽい打撃音をシミュレート） ---
     const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     
-    function playBeep(freq, duration) {
+    function playAppSound(isStart = false) {
         if (audioCtx.state === 'suspended') audioCtx.resume();
         const osc = audioCtx.createOscillator();
         const gain = audioCtx.createGain();
-        osc.connect(gain);
+        const filter = audioCtx.createBiquadFilter();
+
+        osc.connect(filter);
+        filter.connect(gain);
         gain.connect(audioCtx.destination);
-        osc.frequency.value = freq;
-        gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
-        osc.start();
-        osc.stop(audioCtx.currentTime + duration);
+
+        if (isStart) {
+            // カウントダウン音：少し高めの「ピッ」
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(1200, audioCtx.currentTime);
+            gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+            osc.start();
+            osc.stop(audioCtx.currentTime + 0.1);
+        } else {
+            // カウント音：木を叩いたような「カツッ」という音
+            osc.type = 'triangle'; 
+            osc.frequency.setValueAtTime(800, audioCtx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(100, audioCtx.currentTime + 0.05);
+            
+            filter.type = 'lowpass';
+            filter.frequency.value = 2000;
+
+            gain.gain.setValueAtTime(1.0, audioCtx.currentTime); // 音量最大
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.05);
+            
+            osc.start();
+            osc.stop(audioCtx.currentTime + 0.05);
+        }
     }
 
-    // 変数設定
     let counting = false;
     let count = 0;
     let startTime;
@@ -85,10 +105,10 @@
     const bpmDisp = document.getElementById('bpm');
     const paw = document.getElementById('paw');
 
-    // 加速度センサーの処理
     function handleMotion(e) {
         if (!counting) return;
         const accel = e.accelerationIncludingGravity;
+        if(!accel.x) return;
         const total = Math.sqrt(accel.x**2 + accel.y**2 + accel.z**2);
         const threshold = parseInt(document.getElementById('sS').value);
         const cooldown = parseInt(document.getElementById('cS').value);
@@ -98,7 +118,7 @@
             count++;
             countDisp.innerText = count;
             lastTime = now;
-            playBeep(880, 0.1); // カウント音
+            playAppSound(false); // アプリっぽい音
             paw.style.transform = "scale(1.5)";
             setTimeout(() => paw.style.transform = "scale(1)", 100);
             updateBPM();
@@ -107,33 +127,28 @@
 
     function updateBPM() {
         const elapsed = (Date.now() - startTime) / 1000;
-        if (elapsed > 2) {
+        if (elapsed > 1) {
             const bpm = Math.round((count / elapsed) * 60);
-            bpmDisp.innerText = `現在のペース: ${bpm} BPM`;
+            bpmDisp.innerText = `${bpm} BPM`;
         }
     }
 
     startBtn.onclick = async () => {
         if (!counting) {
-            // iOS対策: クリック時にオーディオを再開
             await audioCtx.resume();
-            
-            // 権限リクエスト
             if (typeof DeviceMotionEvent.requestPermission === 'function') {
                 const permission = await DeviceMotionEvent.requestPermission();
-                if (permission !== 'granted') return alert('センサーを許可してください');
+                if (permission !== 'granted') return alert('センサーの使用を許可してください');
             }
 
-            // カウントダウン
             startBtn.disabled = true;
             for(let i=3; i>0; i--) {
                 startBtn.innerText = i;
-                playBeep(440, 0.1);
+                playAppSound(true); 
                 await new Promise(r => setTimeout(r, 1000));
             }
-            playBeep(880, 0.2);
+            playAppSound(false);
 
-            // 計測開始
             counting = true;
             count = 0;
             startTime = Date.now();
@@ -148,11 +163,10 @@
                 timerDisp.innerText = `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`;
             }, 1000);
         } else {
-            // ストップ
             counting = false;
             clearInterval(timerInt);
             window.removeEventListener('devicemotion', handleMotion);
-            startBtn.innerText = "計測スタート";
+            startBtn.innerText = "スタート準備";
             startBtn.classList.remove('stop');
             saveBtn.disabled = false;
         }
@@ -160,33 +174,20 @@
 
     saveBtn.onclick = () => {
         const duration = timerDisp.innerText;
-        const bpm = bpmDisp.innerText.replace('現在のペース: ', '');
-        const date = new Date().toLocaleString('ja-JP');
+        const bpm = bpmDisp.innerText;
+        const date = new Date().toLocaleString('ja-JP', {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'});
         history.unshift({ date, count, duration, bpm });
         localStorage.setItem('kendama_history', JSON.stringify(history.slice(0, 50)));
-        alert(`保存しました！\n回数: ${count}回\nタイム: ${duration}`);
-        count = 0;
-        countDisp.innerText = "0";
-        timerDisp.innerText = "00:00";
-        bpmDisp.innerText = "";
-        saveBtn.disabled = true;
+        alert(`保存完了！\n${count}回 / ${duration}`);
+        count = 0; countDisp.innerText = "0"; timerDisp.innerText = "00:00"; bpmDisp.innerText = ""; saveBtn.disabled = true;
     };
 
-    // 履歴表示ロジック
     document.getElementById('historyBtn').onclick = () => {
         const list = document.getElementById('historyList');
-        list.innerHTML = history.map(item => `
-            <div class="history-item">
-                <strong>${item.date}</strong><br>
-                結果: ${item.count}回 (${item.duration}) / ${item.bpm}
-            </div>
-        `).join('');
+        list.innerHTML = history.map(item => `<div class="history-item"><strong>${item.date}</strong>: ${item.count}回 (${item.duration}) ${item.bpm}</div>`).join('');
         document.getElementById('historyScreen').style.display = 'flex';
     };
     document.getElementById('backBtn').onclick = () => document.getElementById('historyScreen').style.display = 'none';
-    document.getElementById('clearBtn').onclick = () => { if(confirm('履歴を削除しますか？')){ history.length=0; localStorage.removeItem('kendama_history'); document.getElementById('historyList').innerHTML=''; } };
-
-    // スライダーの値表示
     document.getElementById('sS').oninput = (e) => document.getElementById('sVal').innerText = e.target.value;
     document.getElementById('cS').oninput = (e) => document.getElementById('cVal').innerText = e.target.value;
 </script>
