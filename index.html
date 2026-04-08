@@ -51,7 +51,7 @@
                 <input type="range" id="sS" min="10" max="150" value="50">
             </div>
             <div class="slider-group">
-                <label>防止（連続音を防ぐ）: <span id="cVal">250</span>ms</label>
+                <label>誤検出防止（反応間隔）: <span id="cVal">250</span>ms</label>
                 <input type="range" id="cS" min="50" max="800" value="250">
             </div>
         </div>
@@ -174,18 +174,16 @@
                 alert("マイクの使用を許可してください。");
             }
         } else {
-            // 計測ストップ時の処理
             counting = false;
             clearInterval(timerInt);
             if (stream) stream.getTracks().forEach(t => t.stop());
             
-            // --- メイン画面の表示も補正する ---
             count = Math.max(0, count - 1);
             const finalTimeMs = (count > 0) ? (beforeLastTime - startTime) : 0;
             
             countDisp.innerText = count;
             timerDisp.innerText = formatTime(finalTimeMs);
-            updateBPM(beforeLastTime); // 最後から2番目の音の時点のBPMを表示
+            updateBPM(beforeLastTime);
 
             startBtn.innerText = "マイクを許可して開始";
             startBtn.classList.remove('stop');
@@ -194,7 +192,6 @@
     };
 
     saveBtn.onclick = () => {
-        // すでに計測ストップ時に補正済みなので、そのまま値を保存
         const duration = timerDisp.innerText;
         const bpmValue = bpmDisp.innerText;
         const date = new Date().toLocaleString('ja-JP', {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'});
@@ -202,7 +199,6 @@
         history.unshift({ date, count, duration, bpm: bpmValue });
         localStorage.setItem('kendama_history', JSON.stringify(history.slice(0, 50)));
         
-        // 画面リセット
         count = 0;
         countDisp.innerText = "0";
         timerDisp.innerText = "00:00";
