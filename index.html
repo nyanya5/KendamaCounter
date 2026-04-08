@@ -71,7 +71,7 @@
     let counting = false;
     let count = 0;
     let lastTime = 0;
-    let beforeLastTime = 0; // 1つ前の成功音の時間を記録
+    let beforeLastTime = 0;
     let startTime;
     let timerInt;
     let history = JSON.parse(localStorage.getItem('kendama_history') || '[]');
@@ -111,11 +111,10 @@
         const gracePeriod = 1000; 
 
         if (maxVolume > threshold && (now - lastTime) > cooldown && (now - startTime) > gracePeriod) {
-            beforeLastTime = lastTime; // 1つ前の音の時間を保存
+            beforeLastTime = lastTime;
             count++;
             countDisp.innerText = count;
-            lastTime = now; // 最新の音（ミス含む）の時間を保存
-            
+            lastTime = now;
             paw.style.transform = "scale(1.5)";
             setTimeout(() => paw.style.transform = "scale(1)", 100);
             updateBPM();
@@ -123,12 +122,17 @@
         requestAnimationFrame(monitorSound);
     }
 
-    function updateBPM() {
-        const elapsed = (Date.now() - startTime) / 1000;
+    function updateBPM(forcedTime = null) {
+        const elapsed = ( (forcedTime || Date.now()) - startTime) / 1000;
         if (elapsed > 1) {
-            const bpm = Math.round((count / elapsed) * 60);
-            bpmDisp.innerText = `${bpm} BPM`;
+            const bpmValue = Math.round((count / elapsed) * 60);
+            bpmDisp.innerText = `${bpmValue} BPM`;
         }
+    }
+
+    function formatTime(ms) {
+        const s = Math.floor(ms / 1000);
+        return `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`;
     }
 
     startBtn.onclick = async () => {
@@ -154,7 +158,7 @@
                 counting = true;
                 count = 0;
                 startTime = Date.now();
-                lastTime = startTime; 
+                lastTime = startTime;
                 beforeLastTime = startTime;
                 countDisp.innerText = "0";
                 startBtn.innerText = "ストップ";
@@ -164,16 +168,25 @@
 
                 monitorSound();
                 timerInt = setInterval(() => {
-                    const s = Math.floor((Date.now() - startTime) / 1000);
-                    timerDisp.innerText = `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`;
+                    timerDisp.innerText = formatTime(Date.now() - startTime);
                 }, 1000);
             } catch (err) {
                 alert("マイクの使用を許可してください。");
             }
         } else {
+            // 計測ストップ時の処理
             counting = false;
             clearInterval(timerInt);
             if (stream) stream.getTracks().forEach(t => t.stop());
+            
+            // --- メイン画面の表示も補正する ---
+            count = Math.max(0, count - 1);
+            const finalTimeMs = (count > 0) ? (beforeLastTime - startTime) : 0;
+            
+            countDisp.innerText = count;
+            timerDisp.innerText = formatTime(finalTimeMs);
+            updateBPM(beforeLastTime); // 最後から2番目の音の時点のBPMを表示
+
             startBtn.innerText = "マイクを許可して開始";
             startBtn.classList.remove('stop');
             saveBtn.disabled = false;
@@ -181,26 +194,12 @@
     };
 
     saveBtn.onclick = () => {
-        // --- もしかめ用 補正ロジック ---
-        // 最後の1回（ミス音）を除外するため、カウントを-1、タイムを最後から2番目の音までに調整
-        const finalCount = Math.max(0, count - 1);
-        
-        // 計測時間は (最後から2番目の音の時刻 - 開始時刻)
-        // もし1回も成功していなければ0
-        const finalTimeMs = (finalCount > 0) ? (beforeLastTime - startTime) : 0;
-        const s = Math.floor(finalTimeMs / 1000);
-        const finalDuration = `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`;
-        
-        // BPMも補正後の数値で再計算
-        let finalBpm = "0 BPM";
-        if (finalTimeMs > 1000) {
-            finalBpm = Math.round((finalCount / (finalTimeMs / 1000)) * 60) + " BPM";
-        }
-
+        // すでに計測ストップ時に補正済みなので、そのまま値を保存
+        const duration = timerDisp.innerText;
+        const bpmValue = bpmDisp.innerText;
         const date = new Date().toLocaleString('ja-JP', {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'});
         
-        // 履歴には補正後のデータを保存
-        history.unshift({ date, count: finalCount, duration: finalDuration, bpm: finalBpm });
+        history.unshift({ date, count, duration, bpm: bpmValue });
         localStorage.setItem('kendama_history', JSON.stringify(history.slice(0, 50)));
         
         // 画面リセット
