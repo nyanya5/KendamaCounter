@@ -138,7 +138,15 @@
     startBtn.onclick = async () => {
         if (!counting) {
             try {
-                stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                // 【ノイズ対策】自動ゲインコントロール、ノイズ抑制、エコー除去を無効化
+                stream = await navigator.mediaDevices.getUserMedia({ 
+                    audio: {
+                        echoCancellation: false,
+                        noiseSuppression: false,
+                        autoGainControl: false
+                    } 
+                });
+                
                 audioCtx = new (window.AudioContext || window.webkitAudioContext)();
                 const source = audioCtx.createMediaStreamSource(stream);
                 analyser = audioCtx.createAnalyser();
