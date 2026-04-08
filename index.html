@@ -38,7 +38,6 @@
         #count { font-size: 8rem; font-weight: 900; margin: 0; line-height: 1; }
         #bpm { font-size: 1.5rem; font-weight: bold; color: var(--pink); height: 2rem; margin-bottom: 10px; }
         #paw { font-size: 4rem; transition: transform 0.1s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
-        .recording #paw { transform: scale(1.2); }
 
         .controls { width: 100%; margin-top: 20px; }
         button {
@@ -71,7 +70,6 @@
         .slider-group label { font-size: 0.8rem; font-weight: bold; }
         input[type="range"] { width: 100%; accent-color: var(--pink); }
 
-        /* 履歴画面 */
         #historyScreen {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: var(--bg); display: none; flex-direction: column;
@@ -124,33 +122,44 @@
     let detectionTimes = [];
     let timerInterval;
     
-    // 表示用要素
     const countEl = document.getElementById('count');
     const timerEl = document.getElementById('timer');
     const bpmEl = document.getElementById('bpm');
     const startBtn = document.getElementById('startBtn');
     const saveBtn = document.getElementById('saveBtn');
     const paw = document.getElementById('paw');
-
-    // 設定
     const sensSlider = document.getElementById('sensSlider');
     const coolSlider = document.getElementById('coolSlider');
     
-    // 最終有効データ
     let finalCount = 0;
     let finalTime = 0;
     let finalBpm = 0;
 
-    // 音声処理
     async function initAudio() {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        const source = audioContext.createMediaStreamSource(stream);
-        analyser = audioContext.createAnalyser();
-        analyser.fftSize = 256;
-        source.connect(analyser);
-        dataArray = new Uint8Array(analyser.frequencyBinCount);
-        detectSound();
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            const source = audioContext.createMediaStreamSource(stream);
+            analyser = audioContext.createAnalyser();
+            analyser.fftSize = 256;
+            source.connect(analyser);
+            dataArray = new Uint8Array(analyser.frequencyBinCount);
+        } catch (err) {
+            alert("マイクの使用を許可してください。");
+        }
+    }
+
+    function playBeep(freq, duration) {
+        if (!audioContext) return;
+        const osc = audioContext.createOscillator();
+        const gain = audioContext.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, audioContext.currentTime);
+        gain.gain.setValueAtTime(0.1, audioContext.currentTime);
+        osc.connect(gain);
+        gain.connect(audioContext.destination);
+        osc.start();
+        osc.stop(audioContext.currentTime + duration);
     }
 
     let lastClickTime = 0;
@@ -172,27 +181,31 @@
             detectionTimes.push(now);
             countEl.innerText = detectionTimes.length;
             lastClickTime = now;
-            
-            // アニメーション
             paw.style.transform = "scale(1.4)";
             setTimeout(() => paw.style.transform = "scale(1)", 100);
         }
         requestAnimationFrame(detectSound);
     }
 
-    // ボタン処理
     startBtn.onclick = async () => {
+        if (!audioContext) await initAudio();
+        if (audioContext && audioContext.state === 'suspended') await audioContext.resume();
+
         if (!isMeasuring) {
-            // カウントダウン開始
             startBtn.disabled = true;
             let cd = 3;
             bpmEl.innerText = "";
-            countEl.innerText = "3";
+            countEl.innerText = cd;
+            playBeep(440, 0.1);
+
             const cdInt = setInterval(() => {
                 cd--;
-                if (cd > 0) countEl.innerText = cd;
-                else {
+                if (cd > 0) {
+                    countEl.innerText = cd;
+                    playBeep(440, 0.1);
+                } else {
                     clearInterval(cdInt);
+                    playBeep(880, 0.3);
                     startMeasuring();
                 }
             }, 1000);
@@ -202,7 +215,6 @@
     };
 
     function startMeasuring() {
-        if (!audioContext) initAudio();
         isMeasuring = true;
         detectionTimes = [];
         startTime = Date.now();
@@ -217,7 +229,7 @@
             timerEl.innerText = formatTime(elapsed);
         }, 100);
         
-        if (audioContext) detectSound();
+        detectSound();
     }
 
     function stopMeasuring() {
@@ -227,14 +239,12 @@
         startBtn.classList.remove('stop');
         saveBtn.disabled = false;
 
-        // もしかめ計算（最後から2番目の音まで）
         if (detectionTimes.length >= 2) {
             finalCount = detectionTimes.length - 1;
             finalTime = detectionTimes[detectionTimes.length - 2] - startTime;
             const totalMin = finalTime / 60000;
             finalBpm = finalCount / totalMin;
             
-            // 画面表示更新
             countEl.innerText = finalCount;
             timerEl.innerText = formatTime(finalTime);
             bpmEl.innerText = finalBpm.toFixed(1) + " 回/分 (BPM)";
@@ -248,11 +258,9 @@
     saveBtn.onclick = () => {
         const timestamp = new Date().toLocaleString('ja-JP', {month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit'});
         const log = `${timestamp} | ${formatTime(finalTime)} | ${finalCount}回 (${finalBpm.toFixed(1)}/分)`;
-        
         let history = JSON.parse(localStorage.getItem('k_history') || "[]");
         history.unshift(log);
         localStorage.setItem('k_history', JSON.stringify(history));
-        
         resetAll();
     };
 
@@ -268,7 +276,6 @@
         return String(Math.floor(s / 60)).padStart(2, '0') + ":" + String(s % 60).padStart(2, '0');
     }
 
-    // 履歴管理
     document.getElementById('historyBtn').onclick = () => {
         const list = document.getElementById('historyList');
         const history = JSON.parse(localStorage.getItem('k_history') || "[]");
@@ -283,7 +290,6 @@
         }
     };
 
-    // スライダー値表示
     sensSlider.oninput = () => document.getElementById('sensVal').innerText = sensSlider.value;
     coolSlider.oninput = () => document.getElementById('coolVal').innerText = coolSlider.value;
 </script>
