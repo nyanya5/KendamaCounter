@@ -39,7 +39,7 @@
     <div id="count">0</div>
     <div id="paw">🐾</div>
     
-    <label>マイク入力レベル（高域抽出）</label>
+    <label>マイク入力レベル</label>
     <div class="meter-bg"><div id="v-meter"></div></div>
 
     <div class="controls">
@@ -47,8 +47,8 @@
         <button id="saveBtn" disabled>保存してリセット</button>
         <div class="sliders">
             <div class="slider-group">
-                <label>マイク感度（音のしきい値）: <span id="sVal">50</span></label>
-                <input type="range" id="sS" min="10" max="150" value="50">
+                <label>マイク感度（音のしきい値）: <span id="sVal">30</span></label>
+                <input type="range" id="sS" min="5" max="150" value="30">
             </div>
             <div class="slider-group">
                 <label>誤検出防止（反応間隔）: <span id="cVal">400</span>ms</label>
@@ -140,26 +140,21 @@
         if (!counting) {
             try {
                 stream = await navigator.mediaDevices.getUserMedia({ 
-                    audio: { 
-                        echoCancellation: false, 
-                        noiseSuppression: false, 
-                        autoGainControl: false 
-                    } 
+                    audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } 
                 });
                 
                 audioCtx = new (window.AudioContext || window.webkitAudioContext)();
                 const source = audioCtx.createMediaStreamSource(stream);
                 
-                // 【ノイズ対策】ハイパスフィルターを追加（低い音をカット）
+                // フィルターを500Hzに緩和（けん玉の音を通りやすくする）
                 biquadFilter = audioCtx.createBiquadFilter();
                 biquadFilter.type = "highpass";
-                biquadFilter.frequency.value = 1000; // 1000Hz以下のノイズをカット
+                biquadFilter.frequency.value = 500; 
                 
                 analyser = audioCtx.createAnalyser();
                 analyser.fftSize = 256;
-                analyser.minDecibels = -70; // 小さすぎる背景ノイズを無視
+                analyser.minDecibels = -80; // 検知できる最小音の幅を広げる
                 
-                // 接続: マイク -> フィルター -> 解析器
                 source.connect(biquadFilter);
                 biquadFilter.connect(analyser);
                 
