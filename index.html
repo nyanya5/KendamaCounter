@@ -13,7 +13,6 @@
         #bpm { font-size: 1.2rem; font-weight: bold; color: var(--pink); height: 1.5rem; margin-bottom: 5px; }
         #paw { font-size: 4rem; transition: transform 0.1s; margin: 10px 0; }
         
-        /* 音量ゲージ */
         .meter-bg { width: 100%; height: 10px; background: #ddd; border-radius: 5px; margin-bottom: 20px; overflow: hidden; }
         #v-meter { width: 0%; height: 100%; background: var(--pink); transition: width 0.1s; }
 
@@ -80,30 +79,30 @@
     const paw = document.getElementById('paw');
     const vMeter = document.getElementById('v-meter');
 
-    // 効果音の生成（フィードバック用）
-    function playBeep() {
+    // カウントダウン用の音（ピ、ピ、ピー）
+    function playCountdownSound(isLast = false) {
         const ctx = new (window.AudioContext || window.webkitAudioContext)();
         const osc = ctx.createOscillator();
         const g = ctx.createGain();
         osc.connect(g); g.connect(ctx.destination);
-        osc.frequency.value = 800;
-        g.gain.setValueAtTime(0.5, ctx.currentTime);
-        g.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.05);
-        osc.start(); osc.stop(ctx.currentTime + 0.05);
+        
+        osc.frequency.value = isLast ? 880 : 440; // ピーは高音、ピは低音
+        g.gain.setValueAtTime(0.2, ctx.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + (isLast ? 0.5 : 0.1));
+        
+        osc.start();
+        osc.stop(ctx.currentTime + (isLast ? 0.5 : 0.1));
     }
 
-    // マイク音を監視するループ
     function monitorSound() {
         if (!counting) return;
         analyser.getByteFrequencyData(dataArray);
         
-        // 音量の最大値を取得
         let maxVolume = 0;
         for (let i = 0; i < dataArray.length; i++) {
             if (dataArray[i] > maxVolume) maxVolume = dataArray[i];
         }
 
-        // ゲージの表示
         vMeter.style.width = (maxVolume / 255 * 100) + "%";
 
         const threshold = parseInt(document.getElementById('sS').value);
@@ -114,7 +113,7 @@
             count++;
             countDisp.innerText = count;
             lastTime = now;
-            playBeep();
+            // 計測中の音（playSuccessSound）は削除しました
             paw.style.transform = "scale(1.5)";
             setTimeout(() => paw.style.transform = "scale(1)", 100);
             updateBPM();
@@ -133,7 +132,6 @@
     startBtn.onclick = async () => {
         if (!counting) {
             try {
-                // マイクの使用許可を取得
                 stream = await navigator.mediaDevices.getUserMedia({ audio: true });
                 audioCtx = new (window.AudioContext || window.webkitAudioContext)();
                 const source = audioCtx.createMediaStreamSource(stream);
@@ -142,12 +140,22 @@
                 source.connect(analyser);
                 dataArray = new Uint8Array(analyser.frequencyBinCount);
 
+                // カウントダウン開始（ピ、ピ、ピー）
+                startBtn.disabled = true;
+                for(let i=3; i>0; i--) {
+                    startBtn.innerText = i;
+                    playCountdownSound(i === 1); // 1の時だけ「ピー」
+                    await new Promise(r => setTimeout(r, 1000));
+                }
+
+                // 計測開始
                 counting = true;
                 count = 0;
                 startTime = Date.now();
                 countDisp.innerText = "0";
                 startBtn.innerText = "ストップ";
                 startBtn.classList.add('stop');
+                startBtn.disabled = false;
                 saveBtn.disabled = true;
 
                 monitorSound();
@@ -157,7 +165,7 @@
                 }, 1000);
 
             } catch (err) {
-                alert("マイクの使用が拒否されました。設定を確認してください。");
+                alert("マイクの使用が拒否されました。");
             }
         } else {
             counting = false;
