@@ -70,8 +70,7 @@
     let audioCtx, analyser, dataArray, stream;
     let counting = false;
     let count = 0;
-    let lastTime = 0;
-    let beforeLastTime = 0;
+    let tapTimes = []; // 全ての検知時刻を保存する配列
     let startTime;
     let timerInt;
     let history = JSON.parse(localStorage.getItem('kendama_history') || '[]');
@@ -108,23 +107,24 @@
         const threshold = parseInt(document.getElementById('sS').value);
         const cooldown = parseInt(document.getElementById('cS').value);
         const now = Date.now();
-        const gracePeriod = 1000; 
+        const lastTime = tapTimes.length > 0 ? tapTimes[tapTimes.length - 1] : 0;
 
-        if (maxVolume > threshold && (now - lastTime) > cooldown && (now - startTime) > gracePeriod) {
-            beforeLastTime = lastTime; // 1つ前の成功音の時間を記録
+        // 音を検知した時の処理
+        if (maxVolume > threshold && (now - lastTime) > cooldown && (now - startTime) > 1000) {
             count++;
             countDisp.innerText = count;
-            lastTime = now; // 最新の音（ミス音含む）の時間を記録
+            tapTimes.push(now); // 時刻を配列に追加
+            
             paw.style.transform = "scale(1.5)";
             setTimeout(() => paw.style.transform = "scale(1)", 100);
-            updateBPM();
+            updateBPM(now);
         }
         requestAnimationFrame(monitorSound);
     }
 
-    function updateBPM(forcedTime = null) {
-        const elapsed = ( (forcedTime || Date.now()) - startTime) / 1000;
-        if (elapsed > 1) {
+    function updateBPM(currentTime) {
+        const elapsed = (currentTime - startTime) / 1000;
+        if (elapsed > 1 && count > 0) {
             const bpmValue = Math.round((count / elapsed) * 60);
             bpmDisp.innerText = `${bpmValue} BPM`;
         }
@@ -138,15 +138,10 @@
     startBtn.onclick = async () => {
         if (!counting) {
             try {
-                // ノイズ対策：AGC等を無効化
+                // ノイズ対策設定
                 stream = await navigator.mediaDevices.getUserMedia({ 
-                    audio: {
-                        echoCancellation: false,
-                        noiseSuppression: false,
-                        autoGainControl: false
-                    } 
+                    audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } 
                 });
-                
                 audioCtx = new (window.AudioContext || window.webkitAudioContext)();
                 const source = audioCtx.createMediaStreamSource(stream);
                 analyser = audioCtx.createAnalyser();
@@ -165,9 +160,8 @@
 
                 counting = true;
                 count = 0;
+                tapTimes = [];
                 startTime = Date.now();
-                lastTime = startTime;
-                beforeLastTime = startTime;
                 countDisp.innerText = "0";
                 startBtn.innerText = "ストップ";
                 startBtn.classList.add('stop');
@@ -182,20 +176,32 @@
                 alert("マイクの使用を許可してください。");
             }
         } else {
-            // --- ストップ時の補正ロジック ---
+            // ストップボタンが押された時の補正処理
             counting = false;
             clearInterval(timerInt);
             if (stream) stream.getTracks().forEach(t => t.stop());
+
+            // 配列から最後の1回（ミス音）を削除してカウントを減らす
+            if (count > 0) {
+                count--;
+                tapTimes.pop();
+            }
+
+            // 補正後の最終成功時刻を取得
+            const lastSuccessTime = tapTimes.length > 0 ? tapTimes[tapTimes.length - 1] : startTime;
+            const finalTimeMs = (count > 0) ? (lastSuccessTime - startTime) : 0;
             
-            // 最後の1回（ミス音）を除外
-            count = Math.max(0, count - 1);
-            // タイムを最後から2番目の成功音の時刻まで巻き戻す
-            const finalTimeMs = (count > 0) ? (beforeLastTime - startTime) : 0;
-            
-            // メイン画面の表示を更新
+            // 画面表示を即座に更新
             countDisp.innerText = count;
             timerDisp.innerText = formatTime(finalTimeMs);
-            updateBPM(beforeLastTime);
+            
+            // 補正後のタイムでBPMを再計算
+            if (finalTimeMs > 1000 && count > 0) {
+                const finalBpm = Math.round((count / (finalTimeMs / 1000)) * 60);
+                bpmDisp.innerText = `${finalBpm} BPM`;
+            } else {
+                bpmDisp.innerText = "";
+            }
 
             startBtn.innerText = "マイクを許可して開始";
             startBtn.classList.remove('stop');
@@ -204,7 +210,7 @@
     };
 
     saveBtn.onclick = () => {
-        // メイン画面に表示されている（補正済みの）値をそのまま保存
+        // 現在画面に表示されている数値を保存
         const duration = timerDisp.innerText;
         const bpmValue = bpmDisp.innerText;
         const date = new Date().toLocaleString('ja-JP', {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'});
