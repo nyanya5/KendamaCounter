@@ -79,30 +79,25 @@
     const paw = document.getElementById('paw');
     const vMeter = document.getElementById('v-meter');
 
-    // カウントダウン用の音（ピ、ピ、ピー）
-    function playCountdownSound(isLast = false) {
+    // 音の再生（ピ / ピー）
+    function playTone(freq, duration) {
         const ctx = new (window.AudioContext || window.webkitAudioContext)();
         const osc = ctx.createOscillator();
         const g = ctx.createGain();
         osc.connect(g); g.connect(ctx.destination);
-        
-        osc.frequency.value = isLast ? 880 : 440; // ピーは高音、ピは低音
+        osc.frequency.value = freq;
         g.gain.setValueAtTime(0.2, ctx.currentTime);
-        g.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + (isLast ? 0.5 : 0.1));
-        
-        osc.start();
-        osc.stop(ctx.currentTime + (isLast ? 0.5 : 0.1));
+        g.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + duration);
+        osc.start(); osc.stop(ctx.currentTime + duration);
     }
 
     function monitorSound() {
         if (!counting) return;
         analyser.getByteFrequencyData(dataArray);
-        
         let maxVolume = 0;
         for (let i = 0; i < dataArray.length; i++) {
             if (dataArray[i] > maxVolume) maxVolume = dataArray[i];
         }
-
         vMeter.style.width = (maxVolume / 255 * 100) + "%";
 
         const threshold = parseInt(document.getElementById('sS').value);
@@ -113,7 +108,7 @@
             count++;
             countDisp.innerText = count;
             lastTime = now;
-            // 計測中の音（playSuccessSound）は削除しました
+            // 計測中は無音（アニメーションのみ）
             paw.style.transform = "scale(1.5)";
             setTimeout(() => paw.style.transform = "scale(1)", 100);
             updateBPM();
@@ -140,15 +135,20 @@
                 source.connect(analyser);
                 dataArray = new Uint8Array(analyser.frequencyBinCount);
 
-                // カウントダウン開始（ピ、ピ、ピー）
                 startBtn.disabled = true;
+
+                // 修正後のカウントダウン
+                // 3(ピ) -> 2(ピ) -> 1(ピ)
                 for(let i=3; i>0; i--) {
                     startBtn.innerText = i;
-                    playCountdownSound(i === 1); // 1の時だけ「ピー」
+                    playTone(440, 0.1); // 短い「ピ」
                     await new Promise(r => setTimeout(r, 1000));
                 }
+                
+                // 0（計測開始）の瞬間に「ピー」
+                startBtn.innerText = "GO!";
+                playTone(880, 0.5); // 高くて長い「ピー」
 
-                // 計測開始
                 counting = true;
                 count = 0;
                 startTime = Date.now();
