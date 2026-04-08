@@ -15,16 +15,17 @@
         .controls { width: 100%; margin-top: 20px; }
         button { width: 100%; padding: 15px; font-size: 1.2rem; font-weight: bold; border: none; border-radius: 15px; cursor: pointer; margin-bottom: 10px; color: white; }
         #startBtn { background-color: var(--green); color: var(--brown); }
-        #startBtn.stop { background-color: var(--red); }
+        #startBtn.stop { background-color: var(--red); color: white; }
         #saveBtn { background-color: var(--brown); }
-        button:disabled { background-color: #ccc !important; }
-        .sliders { width: 100%; background: white; padding: 15px; border-radius: 15px; box-sizing: border-box; }
+        #historyBtn { background:transparent; color:var(--brown); text-decoration:underline; border:none; }
+        .sliders { width: 100%; background: white; padding: 15px; border-radius: 15px; box-sizing: border-box; margin-bottom: 10px; }
         .slider-group { margin-bottom: 10px; text-align: left; }
         .slider-group label { font-size: 0.8rem; font-weight: bold; }
         input[type="range"] { width: 100%; accent-color: var(--pink); }
+        /* 履歴画面 */
         #historyScreen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg); display: none; flex-direction: column; padding: 20px; box-sizing: border-box; z-index: 100; }
         .history-list { flex: 1; overflow-y: auto; margin: 20px 0; }
-        .history-item { background: white; padding: 10px; border-radius: 10px; margin-bottom: 10px; font-size: 0.85rem; text-align: left; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .history-item { background: white; padding: 10px; border-radius: 10px; margin-bottom: 10px; font-size: 0.85rem; text-align: left; }
     </style>
 </head>
 <body>
@@ -35,13 +36,13 @@
     <div id="count">0</div>
     <div id="paw">🐾</div>
     <div class="controls">
-        <button id="startBtn">計測スタート</button>
-        <button id="saveBtn" disabled>結果を保存してリセット</button>
+        <button id="startBtn">音を準備してスタート</button>
+        <button id="saveBtn" disabled>保存してリセット</button>
         <div class="sliders">
             <div class="slider-group"><label>感度: <span id="sVal">150</span></label><input type="range" id="sS" min="10" max="500" value="150"></div>
             <div class="slider-group"><label>防止: <span id="cVal">300</span>ms</label><input type="range" id="cS" min="50" max="1000" value="300"></div>
         </div>
-        <button id="historyBtn" style="background:transparent; color:var(--brown); text-decoration:underline;">過去の履歴表示 ＞</button>
+        <button id="historyBtn">履歴を表示</button>
     </div>
 </div>
 
@@ -53,6 +54,142 @@
 </div>
 
 <script>
-    // --- 音声データ (Base64埋め込み・超長いですが省略しないでください) ---
-    // カウントダウン用の低い「ピッ」
-    const SOUND_LOW = "data:audio/wav;base64,UklGRl9vT19XQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YVtvT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT19vT1
+    // --- 音声生成（Web Audio APIを使用：最も確実に鳴る方法） ---
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    
+    function playBeep(freq, duration) {
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.frequency.value = freq;
+        gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+        osc.start();
+        osc.stop(audioCtx.currentTime + duration);
+    }
+
+    // 変数設定
+    let counting = false;
+    let count = 0;
+    let startTime;
+    let timerInt;
+    let lastTime = 0;
+    const history = JSON.parse(localStorage.getItem('kendama_history') || '[]');
+
+    const startBtn = document.getElementById('startBtn');
+    const saveBtn = document.getElementById('saveBtn');
+    const countDisp = document.getElementById('count');
+    const timerDisp = document.getElementById('timer');
+    const bpmDisp = document.getElementById('bpm');
+    const paw = document.getElementById('paw');
+
+    // 加速度センサーの処理
+    function handleMotion(e) {
+        if (!counting) return;
+        const accel = e.accelerationIncludingGravity;
+        const total = Math.sqrt(accel.x**2 + accel.y**2 + accel.z**2);
+        const threshold = parseInt(document.getElementById('sS').value);
+        const cooldown = parseInt(document.getElementById('cS').value);
+        const now = Date.now();
+
+        if (total > threshold && (now - lastTime) > cooldown) {
+            count++;
+            countDisp.innerText = count;
+            lastTime = now;
+            playBeep(880, 0.1); // カウント音
+            paw.style.transform = "scale(1.5)";
+            setTimeout(() => paw.style.transform = "scale(1)", 100);
+            updateBPM();
+        }
+    }
+
+    function updateBPM() {
+        const elapsed = (Date.now() - startTime) / 1000;
+        if (elapsed > 2) {
+            const bpm = Math.round((count / elapsed) * 60);
+            bpmDisp.innerText = `現在のペース: ${bpm} BPM`;
+        }
+    }
+
+    startBtn.onclick = async () => {
+        if (!counting) {
+            // iOS対策: クリック時にオーディオを再開
+            await audioCtx.resume();
+            
+            // 権限リクエスト
+            if (typeof DeviceMotionEvent.requestPermission === 'function') {
+                const permission = await DeviceMotionEvent.requestPermission();
+                if (permission !== 'granted') return alert('センサーを許可してください');
+            }
+
+            // カウントダウン
+            startBtn.disabled = true;
+            for(let i=3; i>0; i--) {
+                startBtn.innerText = i;
+                playBeep(440, 0.1);
+                await new Promise(r => setTimeout(r, 1000));
+            }
+            playBeep(880, 0.2);
+
+            // 計測開始
+            counting = true;
+            count = 0;
+            startTime = Date.now();
+            countDisp.innerText = "0";
+            startBtn.disabled = false;
+            startBtn.innerText = "ストップ";
+            startBtn.classList.add('stop');
+            saveBtn.disabled = true;
+            window.addEventListener('devicemotion', handleMotion);
+            timerInt = setInterval(() => {
+                const s = Math.floor((Date.now() - startTime) / 1000);
+                timerDisp.innerText = `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`;
+            }, 1000);
+        } else {
+            // ストップ
+            counting = false;
+            clearInterval(timerInt);
+            window.removeEventListener('devicemotion', handleMotion);
+            startBtn.innerText = "計測スタート";
+            startBtn.classList.remove('stop');
+            saveBtn.disabled = false;
+        }
+    };
+
+    saveBtn.onclick = () => {
+        const duration = timerDisp.innerText;
+        const bpm = bpmDisp.innerText.replace('現在のペース: ', '');
+        const date = new Date().toLocaleString('ja-JP');
+        history.unshift({ date, count, duration, bpm });
+        localStorage.setItem('kendama_history', JSON.stringify(history.slice(0, 50)));
+        alert(`保存しました！\n回数: ${count}回\nタイム: ${duration}`);
+        count = 0;
+        countDisp.innerText = "0";
+        timerDisp.innerText = "00:00";
+        bpmDisp.innerText = "";
+        saveBtn.disabled = true;
+    };
+
+    // 履歴表示ロジック
+    document.getElementById('historyBtn').onclick = () => {
+        const list = document.getElementById('historyList');
+        list.innerHTML = history.map(item => `
+            <div class="history-item">
+                <strong>${item.date}</strong><br>
+                結果: ${item.count}回 (${item.duration}) / ${item.bpm}
+            </div>
+        `).join('');
+        document.getElementById('historyScreen').style.display = 'flex';
+    };
+    document.getElementById('backBtn').onclick = () => document.getElementById('historyScreen').style.display = 'none';
+    document.getElementById('clearBtn').onclick = () => { if(confirm('履歴を削除しますか？')){ history.length=0; localStorage.removeItem('kendama_history'); document.getElementById('historyList').innerHTML=''; } };
+
+    // スライダーの値表示
+    document.getElementById('sS').oninput = (e) => document.getElementById('sVal').innerText = e.target.value;
+    document.getElementById('cS').oninput = (e) => document.getElementById('cVal').innerText = e.target.value;
+</script>
+
+</body>
+</html>
