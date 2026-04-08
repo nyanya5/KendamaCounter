@@ -5,95 +5,37 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>もしかめカウンター🐾</title>
     <style>
-        :root {
-            --brown: #5D4037;
-            --pink: #F06292;
-            --bg: #FFFBF0;
-            --green: #A5D6A7;
-            --red: #FF8A80;
-        }
-        body {
-            font-family: 'Helvetica Neue', Arial, sans-serif;
-            background-color: var(--bg);
-            color: var(--brown);
-            margin: 0;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            height: 100vh;
-            overflow: hidden;
-            user-select: none;
-        }
-        .container {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            width: 90%;
-            max-width: 400px;
-            text-align: center;
-        }
+        :root { --brown: #5D4037; --pink: #F06292; --bg: #FFFBF0; --green: #A5D6A7; --red: #FF8A80; }
+        body { font-family: sans-serif; background-color: var(--bg); color: var(--brown); margin: 0; display: flex; flex-direction: column; align-items: center; height: 100vh; overflow: hidden; user-select: none; }
+        .container { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 90%; max-width: 400px; text-align: center; }
         #timer { font-size: 1.5rem; font-weight: bold; margin-bottom: 20px; }
         #count { font-size: 8rem; font-weight: 900; margin: 0; line-height: 1; }
         #bpm { font-size: 1.5rem; font-weight: bold; color: var(--pink); height: 2rem; margin-bottom: 10px; }
-        #paw { font-size: 4rem; transition: transform 0.1s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
-
+        #paw { font-size: 4rem; transition: transform 0.1s; }
         .controls { width: 100%; margin-top: 20px; }
-        button {
-            width: 100%;
-            padding: 15px;
-            font-size: 1.2rem;
-            font-weight: bold;
-            border: none;
-            border-radius: 15px;
-            cursor: pointer;
-            margin-bottom: 10px;
-            color: white;
-            transition: opacity 0.2s;
-        }
-        button:disabled { background-color: #ccc !important; cursor: not-allowed; }
+        button { width: 100%; padding: 15px; font-size: 1.2rem; font-weight: bold; border: none; border-radius: 15px; cursor: pointer; margin-bottom: 10px; color: white; }
         #startBtn { background-color: var(--green); color: var(--brown); }
         #startBtn.stop { background-color: var(--red); }
         #saveBtn { background-color: var(--brown); }
-        #historyBtn { background-color: transparent; color: var(--brown); text-decoration: underline; border: none; }
-
-        .sliders {
-            width: 100%;
-            background: white;
-            padding: 15px;
-            border-radius: 15px;
-            box-sizing: border-box;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-        }
+        button:disabled { background-color: #ccc !important; }
+        .sliders { width: 100%; background: white; padding: 15px; border-radius: 15px; box-sizing: border-box; }
         .slider-group { margin-bottom: 10px; text-align: left; }
-        .slider-group label { font-size: 0.8rem; font-weight: bold; }
         input[type="range"] { width: 100%; accent-color: var(--pink); }
-
-        #historyScreen {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: var(--bg); display: none; flex-direction: column;
-            padding: 20px; box-sizing: border-box; z-index: 100;
-        }
+        #historyScreen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg); display: none; flex-direction: column; padding: 20px; box-sizing: border-box; z-index: 100; }
         .history-list { flex: 1; overflow-y: auto; margin: 20px 0; }
-        .history-item {
-            background: white; padding: 15px; border-radius: 10px;
-            margin-bottom: 10px; font-size: 0.9rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-        }
+        .history-item { background: white; padding: 10px; border-radius: 10px; margin-bottom: 10px; font-size: 0.9rem; }
     </style>
 </head>
 <body>
 
-<div class="container" id="mainScreen">
+<div class="container">
     <div id="timer">00:00</div>
     <div id="bpm"></div>
     <div id="count">0</div>
     <div id="paw">🐾</div>
-
     <div class="controls">
         <button id="startBtn">計測スタート</button>
         <button id="saveBtn" disabled>結果を保存してリセット</button>
-        
         <div class="sliders">
             <div class="slider-group">
                 <label>感度: <span id="sensVal">150</span></label>
@@ -104,51 +46,43 @@
                 <input type="range" id="coolSlider" min="50" max="1000" value="300">
             </div>
         </div>
-        <button id="historyBtn">過去の履歴を見る ＞</button>
+        <button id="historyBtn" style="background:transparent; color:var(--brown); text-decoration:underline;">過去の履歴 ＞</button>
     </div>
 </div>
 
 <div id="historyScreen">
     <h2>練習の記録 🐾</h2>
     <div class="history-list" id="historyList"></div>
-    <button id="backBtn" style="background-color: var(--brown);">戻る</button>
-    <button id="clearBtn" style="background-color: var(--red); margin-top: 5px;">履歴を全削除</button>
+    <button id="backBtn" style="background:var(--brown);">戻る</button>
 </div>
 
 <script>
-    let audioContext, analyser, dataArray;
-    let isMeasuring = false;
-    let startTime = 0;
-    let detectionTimes = [];
-    let timerInterval;
+    let audioContext, analyser, dataArray, timerInterval;
+    let isMeasuring = false, startTime = 0, detectionTimes = [];
     
-    const countEl = document.getElementById('count');
-    const timerEl = document.getElementById('timer');
-    const bpmEl = document.getElementById('bpm');
-    const startBtn = document.getElementById('startBtn');
-    const saveBtn = document.getElementById('saveBtn');
-    const paw = document.getElementById('paw');
-    const sensSlider = document.getElementById('sensSlider');
-    const coolSlider = document.getElementById('coolSlider');
-    
-    let finalCount = 0;
-    let finalTime = 0;
-    let finalBpm = 0;
+    const countEl = document.getElementById('count'), timerEl = document.getElementById('timer'), bpmEl = document.getElementById('bpm');
+    const startBtn = document.getElementById('startBtn'), saveBtn = document.getElementById('saveBtn'), paw = document.getElementById('paw');
 
-    async function initAudio() {
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    // 音声を初期化する関数
+    async function setupAudio() {
+        if (!audioContext) {
             audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        if (audioContext.state === 'suspended') {
+            await audioContext.resume();
+        }
+        // マイクの初期化（未完了の場合のみ）
+        if (!analyser) {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
             const source = audioContext.createMediaStreamSource(stream);
             analyser = audioContext.createAnalyser();
             analyser.fftSize = 256;
             source.connect(analyser);
             dataArray = new Uint8Array(analyser.frequencyBinCount);
-        } catch (err) {
-            alert("マイクの使用を許可してください。");
         }
     }
 
+    // ビープ音再生
     function playBeep(freq, duration) {
         if (!audioContext) return;
         const osc = audioContext.createOscillator();
@@ -162,114 +96,79 @@
         osc.stop(audioContext.currentTime + duration);
     }
 
-    let lastClickTime = 0;
+    startBtn.onclick = async () => {
+        try {
+            await setupAudio(); // ボタンを押した瞬間にオーディオを有効化
+            
+            if (!isMeasuring) {
+                startBtn.disabled = true;
+                let cd = 3;
+                bpmEl.innerText = "";
+                countEl.innerText = cd;
+                playBeep(440, 0.1); // 最初の「ピッ」
+
+                const cdInt = setInterval(() => {
+                    cd--;
+                    if (cd > 0) {
+                        countEl.innerText = cd;
+                        playBeep(440, 0.1); // ピッ
+                    } else {
+                        clearInterval(cdInt);
+                        playBeep(880, 0.3); // ピー！
+                        startMeasuring();
+                    }
+                }, 1000);
+            } else {
+                stopMeasuring();
+            }
+        } catch (e) {
+            alert("エラー: " + e);
+        }
+    };
+
+    function startMeasuring() {
+        isMeasuring = true; detectionTimes = []; startTime = Date.now();
+        countEl.innerText = "0"; startBtn.innerText = "ミス！(計測終了)";
+        startBtn.classList.add('stop'); startBtn.disabled = false; saveBtn.disabled = true;
+        timerInterval = setInterval(() => { timerEl.innerText = formatTime(Date.now() - startTime); }, 100);
+        detectSound();
+    }
+
     function detectSound() {
         if (!isMeasuring) return;
         analyser.getByteTimeDomainData(dataArray);
-        
         let max = 0;
         for (let i = 0; i < dataArray.length; i++) {
             let v = Math.abs(dataArray[i] - 128);
             if (v > max) max = v;
         }
-
-        const sensitivity = parseInt(sensSlider.value);
-        const cooldown = parseInt(coolSlider.value);
         const now = Date.now();
-
-        if (max > (sensitivity / 10) && (now - lastClickTime) > cooldown) {
-            detectionTimes.push(now);
-            countEl.innerText = detectionTimes.length;
-            lastClickTime = now;
-            paw.style.transform = "scale(1.4)";
-            setTimeout(() => paw.style.transform = "scale(1)", 100);
+        if (max > (document.getElementById('sensSlider').value / 10) && (now - (window.lastT || 0)) > document.getElementById('coolSlider').value) {
+            detectionTimes.push(now); countEl.innerText = detectionTimes.length; window.lastT = now;
+            paw.style.transform = "scale(1.4)"; setTimeout(() => paw.style.transform = "scale(1)", 100);
         }
         requestAnimationFrame(detectSound);
     }
 
-    startBtn.onclick = async () => {
-        if (!audioContext) await initAudio();
-        if (audioContext && audioContext.state === 'suspended') await audioContext.resume();
-
-        if (!isMeasuring) {
-            startBtn.disabled = true;
-            let cd = 3;
-            bpmEl.innerText = "";
-            countEl.innerText = cd;
-            playBeep(440, 0.1);
-
-            const cdInt = setInterval(() => {
-                cd--;
-                if (cd > 0) {
-                    countEl.innerText = cd;
-                    playBeep(440, 0.1);
-                } else {
-                    clearInterval(cdInt);
-                    playBeep(880, 0.3);
-                    startMeasuring();
-                }
-            }, 1000);
-        } else {
-            stopMeasuring();
-        }
-    };
-
-    function startMeasuring() {
-        isMeasuring = true;
-        detectionTimes = [];
-        startTime = Date.now();
-        countEl.innerText = "0";
-        startBtn.innerText = "ミス！(計測終了)";
-        startBtn.classList.add('stop');
-        startBtn.disabled = false;
-        saveBtn.disabled = true;
-
-        timerInterval = setInterval(() => {
-            const elapsed = Date.now() - startTime;
-            timerEl.innerText = formatTime(elapsed);
-        }, 100);
-        
-        detectSound();
-    }
-
     function stopMeasuring() {
-        isMeasuring = false;
-        clearInterval(timerInterval);
-        startBtn.innerText = "計測スタート";
-        startBtn.classList.remove('stop');
-        saveBtn.disabled = false;
-
+        isMeasuring = false; clearInterval(timerInterval);
+        startBtn.innerText = "計測スタート"; startBtn.classList.remove('stop'); saveBtn.disabled = false;
         if (detectionTimes.length >= 2) {
-            finalCount = detectionTimes.length - 1;
-            finalTime = detectionTimes[detectionTimes.length - 2] - startTime;
-            const totalMin = finalTime / 60000;
-            finalBpm = finalCount / totalMin;
-            
-            countEl.innerText = finalCount;
-            timerEl.innerText = formatTime(finalTime);
-            bpmEl.innerText = finalBpm.toFixed(1) + " 回/分 (BPM)";
-        } else {
-            finalCount = 0;
-            finalTime = 0;
-            bpmEl.innerText = "0.0 回/分 (BPM)";
+            const count = detectionTimes.length - 1;
+            const time = detectionTimes[detectionTimes.length - 2] - startTime;
+            countEl.innerText = count; timerEl.innerText = formatTime(time);
+            bpmEl.innerText = (count / (time / 60000)).toFixed(1) + " 回/分 (BPM)";
+            window.lastResult = { count, time, bpm: count / (time / 60000) };
         }
     }
 
     saveBtn.onclick = () => {
-        const timestamp = new Date().toLocaleString('ja-JP', {month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit'});
-        const log = `${timestamp} | ${formatTime(finalTime)} | ${finalCount}回 (${finalBpm.toFixed(1)}/分)`;
-        let history = JSON.parse(localStorage.getItem('k_history') || "[]");
-        history.unshift(log);
-        localStorage.setItem('k_history', JSON.stringify(history));
-        resetAll();
+        const res = window.lastResult;
+        const log = `${new Date().toLocaleString()} | ${formatTime(res.time)} | ${res.count}回 (${res.bpm.toFixed(1)}/分)`;
+        let h = JSON.parse(localStorage.getItem('k_history') || "[]");
+        h.unshift(log); localStorage.setItem('k_history', JSON.stringify(h));
+        countEl.innerText = "0"; timerEl.innerText = "00:00"; bpmEl.innerText = ""; saveBtn.disabled = true;
     };
-
-    function resetAll() {
-        countEl.innerText = "0";
-        timerEl.innerText = "00:00";
-        bpmEl.innerText = "";
-        saveBtn.disabled = true;
-    }
 
     function formatTime(ms) {
         const s = Math.floor(ms / 1000);
@@ -277,21 +176,12 @@
     }
 
     document.getElementById('historyBtn').onclick = () => {
-        const list = document.getElementById('historyList');
-        const history = JSON.parse(localStorage.getItem('k_history') || "[]");
-        list.innerHTML = history.map(item => `<div class="history-item">${item}</div>`).join('');
+        document.getElementById('historyList').innerHTML = JSON.parse(localStorage.getItem('k_history') || "[]").map(i => `<div class="history-item">${i}</div>`).join('');
         document.getElementById('historyScreen').style.display = 'flex';
     };
     document.getElementById('backBtn').onclick = () => document.getElementById('historyScreen').style.display = 'none';
-    document.getElementById('clearBtn').onclick = () => {
-        if(confirm("履歴をすべて削除しますか？")) {
-            localStorage.removeItem('k_history');
-            document.getElementById('historyList').innerHTML = "";
-        }
-    };
-
-    sensSlider.oninput = () => document.getElementById('sensVal').innerText = sensSlider.value;
-    coolSlider.oninput = () => document.getElementById('coolVal').innerText = coolSlider.value;
+    document.getElementById('sensSlider').oninput = (e) => document.getElementById('sensVal').innerText = e.target.value;
+    document.getElementById('coolSlider').oninput = (e) => document.getElementById('coolVal').innerText = e.target.value;
 </script>
 </body>
 </html>
