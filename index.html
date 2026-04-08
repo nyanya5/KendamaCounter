@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>もしかめカウンター🐾</title>
+    <style>
+        :root {
+            --brown: #5D4037;
+            --pink: #F06292;
+            --bg: #FFFBF0;
+            --green: #A5D6A7;
+            --red: #FF8A80;
+        }
+        body {
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            background-color: var(--bg);
+            color: var(--brown);
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+            user-select: none;
+        }
+        .container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            width: 90%;
+            max-width: 400px;
+            text-align: center;
+        }
+        #timer { font-size: 1.5rem; font-weight: bold; margin-bottom: 20px; }
+        #count { font-size: 8rem; font-weight: 900; margin: 0; line-height: 1; }
+        #bpm { font-size: 1.5rem; font-weight: bold; color: var(--pink); height: 2rem; margin-bottom: 10px; }
+        #paw { font-size: 4rem; transition: transform 0.1s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+        .recording #paw { transform: scale(1.2); }
+
+        .controls { width: 100%; margin-top: 20px; }
+        button {
+            width: 100%;
+            padding: 15px;
+            font-size: 1.2rem;
+            font-weight: bold;
+            border: none;
+            border-radius: 15px;
+            cursor: pointer;
+            margin-bottom: 10px;
+            color: white;
+            transition: opacity 0.2s;
+        }
+        button:disabled { background-color: #ccc !important; cursor: not-allowed; }
+        #startBtn { background-color: var(--green); color: var(--brown); }
+        #startBtn.stop { background-color: var(--red); }
+        #saveBtn { background-color: var(--brown); }
+        #historyBtn { background-color: transparent; color: var(--brown); text-decoration: underline; border: none; }
+
+        .sliders {
+            width: 100%;
+            background: white;
+            padding: 15px;
+            border-radius: 15px;
+            box-sizing: border-box;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        }
+        .slider-group { margin-bottom: 10px; text-align: left; }
+        .slider-group label { font-size: 0.8rem; font-weight: bold; }
+        input[type="range"] { width: 100%; accent-color: var(--pink); }
+
+        /* 履歴画面 */
+        #historyScreen {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: var(--bg); display: none; flex-direction: column;
+            padding: 20px; box-sizing: border-box; z-index: 100;
+        }
+        .history-list { flex: 1; overflow-y: auto; margin: 20px 0; }
+        .history-item {
+            background: white; padding: 15px; border-radius: 10px;
+            margin-bottom: 10px; font-size: 0.9rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+    </style>
+</head>
+<body>
+
+<div class="container" id="mainScreen">
+    <div id="timer">00:00</div>
+    <div id="bpm"></div>
+    <div id="count">0</div>
+    <div id="paw">🐾</div>
+
+    <div class="controls">
+        <button id="startBtn">計測スタート</button>
+        <button id="saveBtn" disabled>結果を保存してリセット</button>
+        
+        <div class="sliders">
+            <div class="slider-group">
+                <label>感度: <span id="sensVal">150</span></label>
+                <input type="range" id="sensSlider" min="10" max="500" value="150">
+            </div>
+            <div class="slider-group">
+                <label>誤検出防止: <span id="coolVal">300</span>ms</label>
+                <input type="range" id="coolSlider" min="50" max="1000" value="300">
+            </div>
+        </div>
+        <button id="historyBtn">過去の履歴を見る ＞</button>
+    </div>
+</div>
+
+<div id="historyScreen">
+    <h2>練習の記録 🐾</h2>
+    <div class="history-list" id="historyList"></div>
+    <button id="backBtn" style="background-color: var(--brown);">戻る</button>
+    <button id="clearBtn" style="background-color: var(--red); margin-top: 5px;">履歴を全削除</button>
+</div>
+
+<script>
+    let audioContext, analyser, dataArray;
+    let isMeasuring = false;
+    let startTime = 0;
+    let detectionTimes = [];
+    let timerInterval;
+    
+    // 表示用要素
+    const countEl = document.getElementById('count');
+    const timerEl = document.getElementById('timer');
+    const bpmEl = document.getElementById('bpm');
+    const startBtn = document.getElementById('startBtn');
+    const saveBtn = document.getElementById('saveBtn');
+    const paw = document.getElementById('paw');
+
+    // 設定
+    const sensSlider = document.getElementById('sensSlider');
+    const coolSlider = document.getElementById('coolSlider');
+    
+    // 最終有効データ
+    let finalCount = 0;
+    let finalTime = 0;
+    let finalBpm = 0;
+
+    // 音声処理
+    async function initAudio() {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const source = audioContext.createMediaStreamSource(stream);
+        analyser = audioContext.createAnalyser();
+        analyser.fftSize = 256;
+        source.connect(analyser);
+        dataArray = new Uint8Array(analyser.frequencyBinCount);
+        detectSound();
+    }
+
+    let lastClickTime = 0;
+    function detectSound() {
+        if (!isMeasuring) return;
+        analyser.getByteTimeDomainData(dataArray);
+        
+        let max = 0;
+        for (let i = 0; i < dataArray.length; i++) {
+            let v = Math.abs(dataArray[i] - 128);
+            if (v > max) max = v;
+        }
+
+        const sensitivity = parseInt(sensSlider.value);
+        const cooldown = parseInt(coolSlider.value);
+        const now = Date.now();
+
+        if (max > (sensitivity / 10) && (now - lastClickTime) > cooldown) {
+            detectionTimes.push(now);
+            countEl.innerText = detectionTimes.length;
+            lastClickTime = now;
+            
+            // アニメーション
+            paw.style.transform = "scale(1.4)";
+            setTimeout(() => paw.style.transform = "scale(1)", 100);
+        }
+        requestAnimationFrame(detectSound);
+    }
+
+    // ボタン処理
+    startBtn.onclick = async () => {
+        if (!isMeasuring) {
+            // カウントダウン開始
+            startBtn.disabled = true;
+            let cd = 3;
+            bpmEl.innerText = "";
+            countEl.innerText = "3";
+            const cdInt = setInterval(() => {
+                cd--;
+                if (cd > 0) countEl.innerText = cd;
+                else {
+                    clearInterval(cdInt);
+                    startMeasuring();
+                }
+            }, 1000);
+        } else {
+            stopMeasuring();
+        }
+    };
+
+    function startMeasuring() {
+        if (!audioContext) initAudio();
+        isMeasuring = true;
+        detectionTimes = [];
+        startTime = Date.now();
+        countEl.innerText = "0";
+        startBtn.innerText = "ミス！(計測終了)";
+        startBtn.classList.add('stop');
+        startBtn.disabled = false;
+        saveBtn.disabled = true;
+
+        timerInterval = setInterval(() => {
+            const elapsed = Date.now() - startTime;
+            timerEl.innerText = formatTime(elapsed);
+        }, 100);
+        
+        if (audioContext) detectSound();
+    }
+
+    function stopMeasuring() {
+        isMeasuring = false;
+        clearInterval(timerInterval);
+        startBtn.innerText = "計測スタート";
+        startBtn.classList.remove('stop');
+        saveBtn.disabled = false;
+
+        // もしかめ計算（最後から2番目の音まで）
+        if (detectionTimes.length >= 2) {
+            finalCount = detectionTimes.length - 1;
+            finalTime = detectionTimes[detectionTimes.length - 2] - startTime;
+            const totalMin = finalTime / 60000;
+            finalBpm = finalCount / totalMin;
+            
+            // 画面表示更新
+            countEl.innerText = finalCount;
+            timerEl.innerText = formatTime(finalTime);
+            bpmEl.innerText = finalBpm.toFixed(1) + " 回/分 (BPM)";
+        } else {
+            finalCount = 0;
+            finalTime = 0;
+            bpmEl.innerText = "0.0 回/分 (BPM)";
+        }
+    }
+
+    saveBtn.onclick = () => {
+        const timestamp = new Date().toLocaleString('ja-JP', {month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit'});
+        const log = `${timestamp} | ${formatTime(finalTime)} | ${finalCount}回 (${finalBpm.toFixed(1)}/分)`;
+        
+        let history = JSON.parse(localStorage.getItem('k_history') || "[]");
+        history.unshift(log);
+        localStorage.setItem('k_history', JSON.stringify(history));
+        
+        resetAll();
+    };
+
+    function resetAll() {
+        countEl.innerText = "0";
+        timerEl.innerText = "00:00";
+        bpmEl.innerText = "";
+        saveBtn.disabled = true;
+    }
+
+    function formatTime(ms) {
+        const s = Math.floor(ms / 1000);
+        return String(Math.floor(s / 60)).padStart(2, '0') + ":" + String(s % 60).padStart(2, '0');
+    }
+
+    // 履歴管理
+    document.getElementById('historyBtn').onclick = () => {
+        const list = document.getElementById('historyList');
+        const history = JSON.parse(localStorage.getItem('k_history') || "[]");
+        list.innerHTML = history.map(item => `<div class="history-item">${item}</div>`).join('');
+        document.getElementById('historyScreen').style.display = 'flex';
+    };
+    document.getElementById('backBtn').onclick = () => document.getElementById('historyScreen').style.display = 'none';
+    document.getElementById('clearBtn').onclick = () => {
+        if(confirm("履歴をすべて削除しますか？")) {
+            localStorage.removeItem('k_history');
+            document.getElementById('historyList').innerHTML = "";
+        }
+    };
+
+    // スライダー値表示
+    sensSlider.oninput = () => document.getElementById('sensVal').innerText = sensSlider.value;
+    coolSlider.oninput = () => document.getElementById('coolVal').innerText = coolSlider.value;
+</script>
+</body>
+</html>
