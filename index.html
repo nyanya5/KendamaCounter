@@ -79,7 +79,6 @@
     const paw = document.getElementById('paw');
     const vMeter = document.getElementById('v-meter');
 
-    // 音の再生（ピ / ピー）
     function playTone(freq, duration) {
         const ctx = new (window.AudioContext || window.webkitAudioContext)();
         const osc = ctx.createOscillator();
@@ -104,11 +103,13 @@
         const cooldown = parseInt(document.getElementById('cS').value);
         const now = Date.now();
 
-        if (maxVolume > threshold && (now - lastTime) > cooldown) {
+        // 修正ポイント：開始から1000ms（1秒）経過していない場合は、音を検知しても無視する
+        const gracePeriod = 1000; 
+
+        if (maxVolume > threshold && (now - lastTime) > cooldown && (now - startTime) > gracePeriod) {
             count++;
             countDisp.innerText = count;
             lastTime = now;
-            // 計測中は無音（アニメーションのみ）
             paw.style.transform = "scale(1.5)";
             setTimeout(() => paw.style.transform = "scale(1)", 100);
             updateBPM();
@@ -137,21 +138,18 @@
 
                 startBtn.disabled = true;
 
-                // 修正後のカウントダウン
-                // 3(ピ) -> 2(ピ) -> 1(ピ)
                 for(let i=3; i>0; i--) {
                     startBtn.innerText = i;
-                    playTone(440, 0.1); // 短い「ピ」
+                    playTone(440, 0.1);
                     await new Promise(r => setTimeout(r, 1000));
                 }
                 
-                // 0（計測開始）の瞬間に「ピー」
+                playTone(880, 0.5); // 「ピー」
                 startBtn.innerText = "GO!";
-                playTone(880, 0.5); // 高くて長い「ピー」
 
                 counting = true;
                 count = 0;
-                startTime = Date.now();
+                startTime = Date.now(); // ここで開始時間を記録
                 countDisp.innerText = "0";
                 startBtn.innerText = "ストップ";
                 startBtn.classList.add('stop');
