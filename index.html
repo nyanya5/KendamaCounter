@@ -39,8 +39,8 @@
         <button id="startBtn">スタート準備</button>
         <button id="saveBtn" disabled>保存してリセット</button>
         <div class="sliders">
-            <div class="slider-group"><label>感度: <span id="sVal">150</span></label><input type="range" id="sS" min="10" max="500" value="150"></div>
-            <div class="slider-group"><label>防止: <span id="cVal">300</span>ms</label><input type="range" id="cS" min="50" max="1000" value="300"></div>
+            <div class="slider-group"><label>感度（低いほど敏感）: <span id="sVal">15</span></label><input type="range" id="sS" min="5" max="50" value="15"></div>
+            <div class="slider-group"><label>防止（連続音を防ぐ）: <span id="cVal">250</span>ms</label><input type="range" id="cS" min="50" max="800" value="250"></div>
         </div>
         <button id="historyBtn">履歴を表示</button>
     </div>
@@ -53,7 +53,7 @@
 </div>
 
 <script>
-    // --- 高品質なサウンド生成（アプリっぽい打撃音をシミュレート） ---
+    // --- 改良版：アプリ風サウンド ---
     const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     
     function playAppSound(isStart = false) {
@@ -67,27 +67,23 @@
         gain.connect(audioCtx.destination);
 
         if (isStart) {
-            // カウントダウン音：少し高めの「ピッ」
             osc.type = 'sine';
-            osc.frequency.setValueAtTime(1200, audioCtx.currentTime);
-            gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+            osc.frequency.setValueAtTime(1000, audioCtx.currentTime);
+            gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
             gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
             osc.start();
             osc.stop(audioCtx.currentTime + 0.1);
         } else {
-            // カウント音：木を叩いたような「カツッ」という音
-            osc.type = 'triangle'; 
-            osc.frequency.setValueAtTime(800, audioCtx.currentTime);
-            osc.frequency.exponentialRampToValueAtTime(100, audioCtx.currentTime + 0.05);
-            
+            // 「カツッ」という厚みのある音
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(600, audioCtx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(80, audioCtx.currentTime + 0.04);
             filter.type = 'lowpass';
-            filter.frequency.value = 2000;
-
-            gain.gain.setValueAtTime(1.0, audioCtx.currentTime); // 音量最大
-            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.05);
-            
+            filter.frequency.value = 1500;
+            gain.gain.setValueAtTime(0.8, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.04);
             osc.start();
-            osc.stop(audioCtx.currentTime + 0.05);
+            osc.stop(audioCtx.currentTime + 0.04);
         }
     }
 
@@ -105,22 +101,29 @@
     const bpmDisp = document.getElementById('bpm');
     const paw = document.getElementById('paw');
 
+    // 加速度センサー：より確実に反応するよう調整
     function handleMotion(e) {
         if (!counting) return;
-        const accel = e.accelerationIncludingGravity;
-        if(!accel.x) return;
-        const total = Math.sqrt(accel.x**2 + accel.y**2 + accel.z**2);
-        const threshold = parseInt(document.getElementById('sS').value);
+        
+        // accelerationIncludingGravity（重力込み）を優先使用
+        const acc = e.accelerationIncludingGravity || e.acceleration;
+        if (!acc || acc.x === null) return;
+
+        const total = Math.sqrt(acc.x**2 + acc.y**2 + acc.z**2);
+        const threshold = parseFloat(document.getElementById('sS').value);
         const cooldown = parseInt(document.getElementById('cS').value);
         const now = Date.now();
 
+        // 衝撃を検知
         if (total > threshold && (now - lastTime) > cooldown) {
             count++;
             countDisp.innerText = count;
             lastTime = now;
-            playAppSound(false); // アプリっぽい音
-            paw.style.transform = "scale(1.5)";
-            setTimeout(() => paw.style.transform = "scale(1)", 100);
+            playAppSound(false);
+            
+            // アニメーション
+            paw.style.transform = "scale(1.8)";
+            setTimeout(() => paw.style.transform = "scale(1)", 80);
             updateBPM();
         }
     }
@@ -138,7 +141,7 @@
             await audioCtx.resume();
             if (typeof DeviceMotionEvent.requestPermission === 'function') {
                 const permission = await DeviceMotionEvent.requestPermission();
-                if (permission !== 'granted') return alert('センサーの使用を許可してください');
+                if (permission !== 'granted') return alert('設定 > Safari > モーションと画面の向きのアクセスをONにしてください');
             }
 
             startBtn.disabled = true;
@@ -157,7 +160,8 @@
             startBtn.innerText = "ストップ";
             startBtn.classList.add('stop');
             saveBtn.disabled = true;
-            window.addEventListener('devicemotion', handleMotion);
+            
+            window.addEventListener('devicemotion', handleMotion, true);
             timerInt = setInterval(() => {
                 const s = Math.floor((Date.now() - startTime) / 1000);
                 timerDisp.innerText = `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`;
@@ -165,7 +169,7 @@
         } else {
             counting = false;
             clearInterval(timerInt);
-            window.removeEventListener('devicemotion', handleMotion);
+            window.removeEventListener('devicemotion', handleMotion, true);
             startBtn.innerText = "スタート準備";
             startBtn.classList.remove('stop');
             saveBtn.disabled = false;
@@ -178,8 +182,8 @@
         const date = new Date().toLocaleString('ja-JP', {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'});
         history.unshift({ date, count, duration, bpm });
         localStorage.setItem('kendama_history', JSON.stringify(history.slice(0, 50)));
-        alert(`保存完了！\n${count}回 / ${duration}`);
         count = 0; countDisp.innerText = "0"; timerDisp.innerText = "00:00"; bpmDisp.innerText = ""; saveBtn.disabled = true;
+        alert("保存しました！");
     };
 
     document.getElementById('historyBtn').onclick = () => {
