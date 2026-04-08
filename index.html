@@ -25,7 +25,11 @@
         .slider-group { margin-bottom: 5px; text-align: left; }
         label { font-size: 0.8rem; font-weight: bold; }
         input[type="range"] { width: 100%; accent-color: var(--pink); }
+        
+        /* 履歴画面のスタイル */
         #historyScreen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg); display: none; padding: 20px; box-sizing: border-box; z-index: 100; flex-direction: column; }
+        #historyList { flex: 1; overflow-y: auto; margin-bottom: 10px; }
+        .clear-btn { background-color: #eee; color: #999; font-size: 0.9rem; padding: 10px; box-shadow: none; margin-bottom: 10px; }
     </style>
 </head>
 <body>
@@ -58,7 +62,8 @@
 
 <div id="historyScreen">
     <h2>練習の記録 🐾</h2>
-    <div id="historyList" style="flex:1; overflow-y:auto;"></div>
+    <div id="historyList"></div>
+    <button id="clearBtn" class="clear-btn">全ての履歴を消去</button>
     <button id="backBtn" style="background:var(--brown); color:white;">戻る</button>
 </div>
 
@@ -69,7 +74,7 @@
     let lastTime = 0;
     let startTime;
     let timerInt;
-    const history = JSON.parse(localStorage.getItem('kendama_history') || '[]');
+    let history = JSON.parse(localStorage.getItem('kendama_history') || '[]');
 
     const startBtn = document.getElementById('startBtn');
     const saveBtn = document.getElementById('saveBtn');
@@ -78,6 +83,7 @@
     const bpmDisp = document.getElementById('bpm');
     const paw = document.getElementById('paw');
     const vMeter = document.getElementById('v-meter');
+    const historyList = document.getElementById('historyList');
 
     function playTone(freq, duration) {
         const ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -102,8 +108,6 @@
         const threshold = parseInt(document.getElementById('sS').value);
         const cooldown = parseInt(document.getElementById('cS').value);
         const now = Date.now();
-
-        // 修正ポイント：開始から1000ms（1秒）経過していない場合は、音を検知しても無視する
         const gracePeriod = 1000; 
 
         if (maxVolume > threshold && (now - lastTime) > cooldown && (now - startTime) > gracePeriod) {
@@ -137,19 +141,17 @@
                 dataArray = new Uint8Array(analyser.frequencyBinCount);
 
                 startBtn.disabled = true;
-
                 for(let i=3; i>0; i--) {
                     startBtn.innerText = i;
                     playTone(440, 0.1);
                     await new Promise(r => setTimeout(r, 1000));
                 }
-                
-                playTone(880, 0.5); // 「ピー」
+                playTone(880, 0.5);
                 startBtn.innerText = "GO!";
 
                 counting = true;
                 count = 0;
-                startTime = Date.now(); // ここで開始時間を記録
+                startTime = Date.now();
                 countDisp.innerText = "0";
                 startBtn.innerText = "ストップ";
                 startBtn.classList.add('stop');
@@ -161,9 +163,8 @@
                     const s = Math.floor((Date.now() - startTime) / 1000);
                     timerDisp.innerText = `${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`;
                 }, 1000);
-
             } catch (err) {
-                alert("マイクの使用が拒否されました。");
+                alert("マイクの使用を許可してください。");
             }
         } else {
             counting = false;
@@ -177,19 +178,31 @@
 
     saveBtn.onclick = () => {
         const duration = timerDisp.innerText;
-        const bpm = bpmDisp.innerText;
+        const bpmValue = bpmDisp.innerText;
         const date = new Date().toLocaleString('ja-JP', {month:'short', day:'numeric', hour:'2-digit', minute:'2-digit'});
-        history.unshift({ date, count, duration, bpm });
+        history.unshift({ date, count, duration, bpm: bpmValue });
         localStorage.setItem('kendama_history', JSON.stringify(history.slice(0, 50)));
         alert("保存しました！");
         saveBtn.disabled = true;
     };
 
+    function renderHistory() {
+        historyList.innerHTML = history.map(item => `<div style="background:white; margin-bottom:5px; padding:10px; border-radius:10px;">${item.date}: ${item.count}回 (${item.duration}) ${item.bpm || ''}</div>`).join('');
+    }
+
     document.getElementById('historyBtn').onclick = () => {
-        const list = document.getElementById('historyList');
-        list.innerHTML = history.map(item => `<div style="background:white; margin-bottom:5px; padding:10px; border-radius:10px;">${item.date}: ${item.count}回 (${item.duration})</div>`).join('');
+        renderHistory();
         document.getElementById('historyScreen').style.display = 'flex';
     };
+
+    document.getElementById('clearBtn').onclick = () => {
+        if(confirm("全ての記録を削除しますか？")) {
+            history = [];
+            localStorage.removeItem('kendama_history');
+            renderHistory();
+        }
+    };
+
     document.getElementById('backBtn').onclick = () => document.getElementById('historyScreen').style.display = 'none';
     document.getElementById('sS').oninput = (e) => document.getElementById('sVal').innerText = e.target.value;
     document.getElementById('cS').oninput = (e) => document.getElementById('cVal').innerText = e.target.value;
