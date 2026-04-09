@@ -65,7 +65,6 @@
     let count = 0;
     let tapTimes = [];
     let startTime;
-    let lastSuccessTime; // 最後から2番目の成功音を特定するための変数
     let timerInt;
     let history = JSON.parse(localStorage.getItem('kendama_history') || '[]');
 
@@ -105,20 +104,17 @@
             count++;
             countDisp.innerText = count;
             tapTimes.push(now);
-            lastSuccessTime = now; // 成功音として時刻を保持
             paw.style.transform = "scale(1.4)";
             setTimeout(() => paw.style.transform = "scale(1)", 80);
-            updatePace(now);
+            
+            // リアルタイム表示は「現在のカウントと経過時間」で暫定計算
+            const elapsed = (now - startTime) / 1000;
+            if (elapsed > 1 && count > 1) {
+                const paceValue = Math.round(((count - 1) / elapsed) * 60);
+                paceDisp.innerText = `${paceValue} 回/分`;
+            }
         }
         requestAnimationFrame(monitorSound);
-    }
-
-    function updatePace(currentTime) {
-        const elapsed = (currentTime - startTime) / 1000;
-        if (elapsed > 1 && count > 1) {
-            const paceValue = Math.round(((count - 1) / elapsed) * 60);
-            paceDisp.innerText = `${paceValue} 回/分`;
-        }
     }
 
     startBtn.onclick = async () => {
@@ -145,9 +141,7 @@
                 }
                 playTone(880, 0.5);
                 counting = true;
-                count = 0; tapTimes = []; 
-                startTime = Date.now();
-                lastSuccessTime = startTime; // 初期値
+                count = 0; tapTimes = []; startTime = Date.now();
                 countDisp.innerText = "0";
                 startBtn.innerText = "ストップ";
                 startBtn.classList.add('stop');
@@ -168,15 +162,33 @@
         clearInterval(timerInt);
         if (stream) stream.getTracks().forEach(t => t.stop());
         
-        // 【修正】最後の一回（失敗音）をカウントから引き、時間もその前の成功時に戻す
+        let finalSuccessTime = startTime;
+        
+        // ストップ時の最終計算
         if (count > 0) { 
+            // 最後の1回（失敗音）をカウントから引く
             count--; 
             tapTimes.pop(); 
-            lastSuccessTime = tapTimes.length > 0 ? tapTimes[tapTimes.length - 1] : startTime;
+            
+            // 成功した最後の音（最後から2番目の音）の時刻を取得
+            if (tapTimes.length > 0) {
+                finalSuccessTime = tapTimes[tapTimes.length - 1];
+            }
         }
+
+        // 有効な所要時間
+        const effectiveElapsed = (finalSuccessTime - startTime) / 1000;
         
-        const finalDuration = Math.floor((lastSuccessTime - startTime) / 1000);
-        timerDisp.innerText = finalDuration.toString().padStart(2, '0') + "秒";
+        // タイマー表示を有効な時間に書き換える
+        timerDisp.innerText = Math.floor(effectiveElapsed).toString().padStart(2, '0') + "秒";
+        
+        // ペースを最終確定させる（最後から2番目の音までの回数と時間で計算）
+        if (effectiveElapsed > 0 && count > 0) {
+            const finalPace = Math.round((count / effectiveElapsed) * 60);
+            paceDisp.innerText = `${finalPace} 回/分`;
+        } else {
+            paceDisp.innerText = "--- 回/分";
+        }
         
         countDisp.innerText = count;
         startBtn.innerText = "開始";
