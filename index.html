@@ -45,6 +45,7 @@
             font-size: 60px;
             text-align: center;
             margin-bottom: 10px;
+            transition: transform 0.1s;
         }
         .progress-container {
             width: 100%;
@@ -115,6 +116,9 @@
             border-radius: 12px;
             margin-bottom: 8px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            color: #5D4037;
+            font-size: 14px;
+            font-weight: 500;
         }
         .history-footer { display: flex; gap: 8px; width: 100%; margin-top: 16px; }
         .btn-back { background-color: #5D4037; color: white; flex: 1; height: 48px; }
@@ -177,8 +181,12 @@
     let finalEffectiveTime = 0;
     let finalBpm = 0;
 
-    function mapSensitivity(val) {
-        return 31000 - (val * 300); 
+    // 感度計算の修正: スライダー100の時に閾値を小さく(敏感に)、1の時に大きく(鈍感に)する
+    function getThreshold(val) {
+        // Androidの1000(敏感)〜30000(鈍感)の範囲に反転してマップ
+        // スライダー100 -> 1000 (敏感)
+        // スライダー1 -> 30700 (鈍感)
+        return 31000 - (val * 300);
     }
 
     const prefs = {
@@ -200,14 +208,10 @@
     }
 
     async function toggleMeasure() {
-        if (!isMeasuring) {
-            startCountdown();
-        } else {
-            stopMeasure();
-        }
+        if (!isMeasuring) startCountdown();
+        else stopMeasure();
     }
 
-    // カウントダウン処理
     function startCountdown() {
         const btn = document.getElementById('main-button');
         btn.disabled = true;
@@ -277,11 +281,14 @@
         document.getElementById('progress-bar').style.width = Math.min(100, (normalizedAmp / 32767) * 100) + "%";
 
         const now = Date.now();
-        const threshold = mapSensitivity(prefs.sensitivity);
+        const threshold = getThreshold(prefs.sensitivity);
 
         if (normalizedAmp > threshold && (now - lastClickTime) > prefs.cooldown) {
             detectionTimes.push(now);
             lastClickTime = now;
+            // 視覚的フィードバック
+            document.getElementById('cat-icon').style.transform = "scale(1.2)";
+            setTimeout(() => { document.getElementById('cat-icon').style.transform = "scale(1.0)"; }, 100);
         }
         requestAnimationFrame(analyzeAudio);
     }
@@ -291,6 +298,7 @@
         clearInterval(timerInterval);
         if (audioContext) audioContext.close();
 
+        // 最後の1打（ミス）を除外する計算ロジックをAndroid版[cite: 1, 28-32]から継承
         if (detectionTimes.length >= 2) {
             finalEffectiveCount = detectionTimes.length - 1;
             finalEffectiveTime = detectionTimes[detectionTimes.length - 2] - startTime;
@@ -323,7 +331,9 @@
     }
 
     function saveAndReset() {
-        const timestamp = new Date().toLocaleString('ja-JP', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+        const now = new Date();
+        const timestamp = (now.getMonth() + 1).toString().padStart(2, '0') + "/" + now.getDate().toString().padStart(2, '0') + " " + 
+                          now.getHours().toString().padStart(2, '0') + ":" + now.getMinutes().toString().padStart(2, '0');
         const entry = `${timestamp} | ${formatTime(finalEffectiveTime)} | ${finalEffectiveCount} 回 (${finalBpm.toFixed(1)}/分)`;
         let history = JSON.parse(localStorage.getItem('history_list') || '[]');
         history.push(entry);
@@ -345,9 +355,10 @@
         const history = JSON.parse(localStorage.getItem('history_list') || '[]');
         const list = document.getElementById('history-list');
         list.innerHTML = '';
-        history.reverse().forEach(item => {
+        history.slice().reverse().forEach(item => {
             const card = document.createElement('div');
             card.className = 'history-card';
+            card.style.padding = '16px'; // Android版のカード内余白[cite: 1, 46]
             card.textContent = item;
             list.appendChild(card);
         });
