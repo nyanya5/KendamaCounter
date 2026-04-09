@@ -8,12 +8,12 @@
         :root { --brown: #5D4037; --pink: #F06292; --bg: #FFFBF0; --green: #A5D6A7; --red: #FF8A80; }
         body { font-family: sans-serif; background: var(--bg); color: var(--brown); margin: 0; display: flex; flex-direction: column; align-items: center; min-height: 100vh; user-select: none; }
         
-        .container { width: 92%; max-width: 400px; display: flex; flex-direction: column; align-items: center; padding: 10px 0; box-sizing: border-box; }
+        /* height: 100vh を指定して画面いっぱいの高さを確保 */
+        .container { width: 92%; max-width: 400px; height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 10px 0 20px 0; box-sizing: border-box; }
         
-        /* 表示エリア：スマホ向けにサイズを少し縮小 */
-        .display-area { display: flex; flex-direction: column; align-items: center; justify-content: center; margin-bottom: 10px; }
+        .display-area { display: flex; flex-direction: column; align-items: center; justify-content: center; margin-bottom: 5px; }
         #timer { font-size: 1.2rem; font-weight: bold; }
-        #count { font-size: 8.5rem; font-weight: 900; margin: -10px 0; line-height: 1; color: var(--brown); }
+        #count { font-size: 8rem; font-weight: 900; margin: -10px 0; line-height: 1; color: var(--brown); }
         #pace { font-size: 1rem; font-weight: bold; color: var(--pink); height: 1.2rem; }
         #paw { font-size: 3rem; transition: transform 0.1s; margin: 5px 0; }
         
@@ -21,13 +21,11 @@
         .meter-bg { width: 100%; height: 6px; background: #ddd; border-radius: 3px; margin-bottom: 10px; overflow: hidden; }
         #v-meter { width: 0%; height: 100%; background: var(--pink); transition: width 0.1s; }
         
-        /* 設定パネルのコンパクト化 */
-        .settings-panel { width: 100%; background: white; padding: 10px; border-radius: 15px; box-sizing: border-box; margin-bottom: 15px; border: 1px solid #eee; font-size: 0.8rem; }
+        .settings-panel { width: 100%; background: white; padding: 10px; border-radius: 15px; box-sizing: border-box; margin-bottom: 10px; border: 1px solid #eee; font-size: 0.8rem; }
         .mode-switch { display: flex; gap: 6px; margin-bottom: 10px; }
         .mode-btn { flex: 1; padding: 8px; font-size: 0.9rem; border-radius: 10px; background: #eee; border: none; font-weight: bold; cursor: pointer; }
         .mode-btn.active { background: var(--pink); color: white; }
         
-        /* ボタンサイズの調整 */
         button { width: 100%; padding: 14px; font-size: 1.1rem; font-weight: bold; border: none; border-radius: 18px; cursor: pointer; margin-bottom: 8px; box-shadow: 0 4px #ccc; transition: opacity 0.2s; }
         button:active { transform: translateY(2px); box-shadow: 0 2px #ccc; }
         button:disabled { opacity: 0.5; box-shadow: none; cursor: not-allowed; }
@@ -36,7 +34,8 @@
         #startBtn.stop { background-color: var(--red); color: white; }
         #saveBtn { background-color: var(--brown); color: white; }
         
-        .bottom-area { width: 100%; margin-top: 5px; }
+        /* ここで上の要素との間に自動的な余白を作ります */
+        .bottom-area { width: 100%; margin-top: auto; }
         #historyBtn { background-color: #f5f5f5; color: var(--brown); font-size: 1rem; padding: 12px; margin-bottom: 0; box-shadow: 0 3px #ddd; }
 
         .slider-group { margin-bottom: 6px; text-align: left; }
@@ -93,6 +92,7 @@
 </div>
 
 <script>
+    // 内部のロジック（JavaScript）は変更なしでOKです
     let audioCtx, analyser, dataArray, stream, filter;
     let counting = false;
     let count = 0;
