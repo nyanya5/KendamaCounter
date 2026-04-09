@@ -131,11 +131,11 @@
                 audioCtx = new (window.AudioContext || window.webkitAudioContext)();
                 const source = audioCtx.createMediaStreamSource(stream);
                 
-                // フィルターを800Hz〜3000Hzを広くカバーする設定に戻しました
+                // 少し低い音も拾えるよう中心周波数を1600Hzに調整しました
                 filter = audioCtx.createBiquadFilter();
                 filter.type = "bandpass";
-                filter.frequency.value = 1900; 
-                filter.Q.value = 0.8; // 数値を小さくして、拾う範囲を広げました
+                filter.frequency.value = 1600; 
+                filter.Q.value = 0.8; 
                 
                 analyser = audioCtx.createAnalyser();
                 analyser.fftSize = 512;
