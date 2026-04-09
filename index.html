@@ -21,7 +21,7 @@
             height: 100%;
             padding: 24px;
             box-sizing: border-box;
-            align-items: center; /* 中央揃え */
+            align-items: center;
         }
         .timer {
             font-size: 24px;
@@ -65,7 +65,7 @@
             flex-direction: column;
             gap: 12px;
             margin-bottom: 32px;
-            width: 80%; /* ボタンの幅を短く設定 */
+            width: 80%;
             max-width: 300px;
         }
         button {
@@ -77,11 +77,14 @@
             font-weight: bold;
             cursor: pointer;
         }
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
         .btn-start { background-color: #A5D6A7; color: #5D4037; }
         .btn-stop { background-color: #FF8A80; color: #5D4037; }
         .btn-save { background-color: #5D4037; color: white; }
         
-        /* スライダーコンテナ */
         .settings-card {
             background: white;
             padding: 16px;
@@ -105,7 +108,6 @@
             padding-bottom: 20px;
         }
 
-        /* 履歴画面 */
         #history-list { width: 100%; flex-grow: 1; overflow-y: auto; }
         .history-card {
             background: white;
@@ -175,7 +177,6 @@
     let finalEffectiveTime = 0;
     let finalBpm = 0;
 
-    // 感度の内部計算用：1-100を1000-30000の範囲にマップ
     function mapSensitivity(val) {
         return 31000 - (val * 300); 
     }
@@ -199,8 +200,41 @@
     }
 
     async function toggleMeasure() {
-        if (!isMeasuring) startRecording();
-        else stopMeasure();
+        if (!isMeasuring) {
+            startCountdown();
+        } else {
+            stopMeasure();
+        }
+    }
+
+    // カウントダウン処理
+    function startCountdown() {
+        const btn = document.getElementById('main-button');
+        btn.disabled = true;
+        btn.textContent = "準備中...";
+        
+        let countdn = 3;
+        const beep = (freq, dur) => {
+            const ctx = new (window.AudioContext || window.webkitAudioContext)();
+            const osc = ctx.createOscillator();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(freq, ctx.currentTime);
+            osc.connect(ctx.destination);
+            osc.start();
+            osc.stop(ctx.currentTime + dur);
+        };
+
+        const interval = setInterval(() => {
+            if (countdn > 0) {
+                beep(440, 0.1);
+                document.getElementById('count-display').textContent = countdn;
+                countdn--;
+            } else {
+                clearInterval(interval);
+                beep(880, 0.4);
+                startRecording();
+            }
+        }, 1000);
     }
 
     async function startRecording() {
@@ -220,6 +254,7 @@
         startTime = Date.now();
         
         const btn = document.getElementById('main-button');
+        btn.disabled = false;
         btn.className = "btn-stop";
         btn.textContent = "ストップ";
         document.getElementById('save-button').disabled = true;
