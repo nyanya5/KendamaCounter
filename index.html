@@ -65,6 +65,7 @@
     let count = 0;
     let tapTimes = [];
     let startTime;
+    let lastSuccessTime; // 最後から2番目の成功音を特定するための変数
     let timerInt;
     let history = JSON.parse(localStorage.getItem('kendama_history') || '[]');
 
@@ -90,14 +91,11 @@
     async function monitorSound() {
         if (!counting) return;
         analyser.getByteFrequencyData(dataArray);
-        
         let maxVolume = 0;
         for (let i = 0; i < dataArray.length; i++) {
             if (dataArray[i] > maxVolume) maxVolume = dataArray[i];
         }
-        
         vMeter.style.width = Math.min(100, (maxVolume / 180 * 100)) + "%";
-
         const threshold = parseInt(document.getElementById('sS').value);
         const cooldown = parseInt(document.getElementById('cS').value);
         const now = Date.now();
@@ -107,6 +105,7 @@
             count++;
             countDisp.innerText = count;
             tapTimes.push(now);
+            lastSuccessTime = now; // 成功音として時刻を保持
             paw.style.transform = "scale(1.4)";
             setTimeout(() => paw.style.transform = "scale(1)", 80);
             updatePace(now);
@@ -125,26 +124,19 @@
     startBtn.onclick = async () => {
         if (!counting) {
             try {
-                stream = await navigator.mediaDevices.getUserMedia({ 
-                    audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } 
-                });
+                stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
                 audioCtx = new (window.AudioContext || window.webkitAudioContext)();
                 const source = audioCtx.createMediaStreamSource(stream);
-                
-                // 少し低い音も拾えるよう中心周波数を1600Hzに調整しました
                 filter = audioCtx.createBiquadFilter();
                 filter.type = "bandpass";
                 filter.frequency.value = 1600; 
                 filter.Q.value = 0.8; 
-                
                 analyser = audioCtx.createAnalyser();
                 analyser.fftSize = 512;
                 analyser.minDecibels = -85;
-                
                 source.connect(filter);
                 filter.connect(analyser);
                 dataArray = new Uint8Array(analyser.frequencyBinCount);
-
                 startBtn.disabled = true;
                 for(let i=3; i>0; i--) {
                     startBtn.innerText = i;
@@ -152,24 +144,20 @@
                     await new Promise(r => setTimeout(r, 1000));
                 }
                 playTone(880, 0.5);
-                
                 counting = true;
-                count = 0;
-                tapTimes = [];
+                count = 0; tapTimes = []; 
                 startTime = Date.now();
+                lastSuccessTime = startTime; // 初期値
                 countDisp.innerText = "0";
                 startBtn.innerText = "ストップ";
                 startBtn.classList.add('stop');
                 startBtn.disabled = false;
                 saveBtn.disabled = true;
-
                 monitorSound();
                 timerInt = setInterval(() => {
                     timerDisp.innerText = Math.floor((Date.now() - startTime) / 1000).toString().padStart(2, '0') + "秒";
                 }, 1000);
-            } catch (err) {
-                alert("マイクを許可してください");
-            }
+            } catch (err) { alert("マイクを許可してください"); }
         } else {
             stopCounting();
         }
@@ -179,7 +167,17 @@
         counting = false;
         clearInterval(timerInt);
         if (stream) stream.getTracks().forEach(t => t.stop());
-        if (count > 0) { count--; tapTimes.pop(); }
+        
+        // 【修正】最後の一回（失敗音）をカウントから引き、時間もその前の成功時に戻す
+        if (count > 0) { 
+            count--; 
+            tapTimes.pop(); 
+            lastSuccessTime = tapTimes.length > 0 ? tapTimes[tapTimes.length - 1] : startTime;
+        }
+        
+        const finalDuration = Math.floor((lastSuccessTime - startTime) / 1000);
+        timerDisp.innerText = finalDuration.toString().padStart(2, '0') + "秒";
+        
         countDisp.innerText = count;
         startBtn.innerText = "開始";
         startBtn.classList.remove('stop');
