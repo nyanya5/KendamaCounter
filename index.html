@@ -91,6 +91,7 @@
     let count = 0;
     let detectionTimes = [];
     let startTime = 0;
+    let ignoreUntil = 0; // 開始直後の音を無視するための変数
     let timerInterval;
     let audioContext;
     let analyser;
@@ -101,9 +102,7 @@
     let finalEffectiveTime = 0;
     let finalBpm = 0;
 
-    // 感度計算の修正: 1に近いほど閾値を小さく(敏感)、100に近いほど大きく(鈍感)
     function getThreshold(val) {
-        // val=1のとき約500(超敏感)、val=100のとき30000(鈍感)
         return (val * 300) + 200;
     }
 
@@ -168,8 +167,11 @@
         analyser.fftSize = 256;
         source.connect(analyser);
         dataArray = new Uint8Array(analyser.frequencyBinCount);
+        
         isMeasuring = true;
         startTime = Date.now();
+        ignoreUntil = startTime + 1000; // 1秒間（1000ms）は無視する
+        
         const btn = document.getElementById('main-button');
         btn.disabled = false;
         btn.className = "btn-stop";
@@ -189,9 +191,12 @@
         }
         const normalizedAmp = maxAmp * 256;
         document.getElementById('progress-bar').style.width = Math.min(100, (normalizedAmp / 32767) * 100) + "%";
+        
         const now = Date.now();
         const threshold = getThreshold(prefs.sensitivity);
-        if (normalizedAmp > threshold && (now - lastClickTime) > prefs.cooldown) {
+        
+        // ignoreUntilを過ぎており、かつ感度とクールダウンの条件を満たす場合のみカウント
+        if (now > ignoreUntil && normalizedAmp > threshold && (now - lastClickTime) > prefs.cooldown) {
             detectionTimes.push(now);
             lastClickTime = now;
             document.getElementById('cat-icon').style.transform = "scale(1.2)";
